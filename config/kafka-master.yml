@@ -1,0 +1,10 @@
+purchase_type: on_demand
+subnet_id: subnet-0c26e408f5494c8c9
+num_instances: 1
+key_name: david-IAM-keypair
+security_group_ids: sg-06b9b1eee1ab9920d
+instance_type: m5a.large
+tag_name: kafka-cluster
+vol_size: 75
+role: master
+use_eips: true
