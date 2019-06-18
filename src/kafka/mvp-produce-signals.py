@@ -5,7 +5,8 @@ import pandas as pd
 
 
 # Get EEG data in csv format from S3. By default, MVP data will be fetched.
-def get_eeg_object_from_s3(mybucket='speegs-source-chbmit', mykey=f"{subject_id}/{subject_id}_03.csv"):
+def get_eeg_object_from_s3(my_subject_id, mybucket='speegs-source-chbmit'):
+    mykey = f"{my_subject_id}/{my_subject_id}_03.csv"
     s3 = boto3.client('s3')
     s3obj = s3.get_object(Bucket=mybucket, Key=mykey)
     return s3obj
@@ -27,9 +28,9 @@ def initialize_topics(a, my_subject_id):
 
 
 # Push EEG signal from S3 to Kafka
-def produce_eeg_messages(p, patient):
+def produce_eeg_messages(p, my_subject_id):
 
-    obj = get_eeg_object_from_s3()
+    obj = get_eeg_object_from_s3(my_subject_id)
     df = pd.read_csv(obj['Body'], header=0)
     keyLabels = list(df)
 
@@ -37,7 +38,7 @@ def produce_eeg_messages(p, patient):
         for channel in range(1,24):
             mykey = keyLabels[channel]
             myvalue = f"{row[0]}:{row[channel]}"
-            p.send(patient, key=mykey, value=myvalue)
+            p.send(my_subject_id, key=mykey, value=myvalue)
 
     p.flush()
 
