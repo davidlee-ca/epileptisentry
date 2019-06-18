@@ -33,9 +33,9 @@ def get_eeg_object_from_s3(mybucket='speegs-source-chbmit', mykey=f"{subject_id}
     return s3obj
 
 
+"""
 # For development only
 def delete_topics(a, topics):
-    """ delete topics """
     # Call delete_topics to asynchronously delete topics, a future is returned.
     # By default this operation on the broker returns immediately while
     # topics are deleted in the background. But here we give it some time (30s)
@@ -43,8 +43,7 @@ def delete_topics(a, topics):
     #
     # Returns a dict of <topic,future>.
 #    fs = a.delete_topics(topics, operation_timeout=30)
-    fs = a.delete_topics(topics, timeout_ms=20000)
-"""
+    a.delete_topics(topics, timeout_ms=30000)
     # Wait for operation to finish.
     for topic, f in fs.items():
         try:
@@ -56,9 +55,21 @@ def delete_topics(a, topics):
 
 
 def initialize_topics(a, patients, retry_on_error=True):
-    patienttopics = list(map(lambda p: NewTopic(patients, 3, 3), patients))
-    fs = a.create_topics(patienttopics)
+#    patienttopics = list(map(lambda p: NewTopic(patients, 3, 3), patients))
+#    fs = a.create_topics(patienttopics)
+#    fs = a.create_topics(list(NewTopic(patients,3,3)))
+    new_patient_topicname = [patients]
+    try:
+        a.delete_topics(new_patient_topicname, timeout_ms=30000)
+    except Exception as e:
+        pass
 
+    new_patient_topic = [NewTopic(patients,3,3)]
+    try:
+        a.create_topics(new_patient_topic)
+    except Exception as e:
+        print (f"Failed to create topic {patients}: {e}.")
+"""
     for topic, f in fs.items():
         try:
             f.result()
@@ -67,7 +78,7 @@ def initialize_topics(a, patients, retry_on_error=True):
             print (f"Failed to create topic {patients}: {e}")
             if retry_on_error:
                 print ("Will attempt to delete the topic and create it again...")
-                delete_topics(a, list(topic))
+                delete_topics(a, )"""
 
 
 def produce_eeg_messages(p, patient):
@@ -76,15 +87,17 @@ def produce_eeg_messages(p, patient):
     df = pd.read_csv(obj['Body'], header=0)
     keyLabels = list(df)
 
-    for row in df:
+    for row in df.itertuples(index=False):
         # Trigger any available delivery report callbacks from previous produce() calls
-        p.poll(0)
+#        p.poll(0)
 
         # Asynchronously produce a message, the delivery report callback
         # will be triggered from poll() above, or flush() below, when the message has
         # been successfully delivered or failed permanently.
         for channel in range(1,24):
-            p.produce(patient, key=keyLabels[channel], value=f"{row[0]}:{row[channel]}", callback=delivery_report)
+            mykey = keyLabels[channel]
+            myvalue = f"{row[0]}:{row[channel]}"
+            p.send(patient, key=mykey, value=myvalue)
 
     # Wait for any outstanding messages to be delivered and delivery report
     # callbacks to be triggered.
@@ -104,9 +117,8 @@ if __name__ == "__main__":
 
     #    p = Producer(kafka_producer_conf)
     #    a = AdminClient(kafka_admin_conf)
-    p = KafkaProducer(bootstrap_servers='ip-10-0-0-8.ec2.internal:9092')
+    p = KafkaProducer(bootstrap_servers='ip-10-0-0-8.ec2.internal:9092', key_serializer=lambda m:str.encode(m), value_serializer=lambda m:str.encode(m))
     a = KafkaAdminClient(bootstrap_servers='ip-10-0-0-8.ec2.internal:9092')
-
 
     initialize_topics(a, subject_id)
     produce_eeg_messages(p, subject_id)
