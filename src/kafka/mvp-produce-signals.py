@@ -2,7 +2,7 @@ from kafka import KafkaProducer
 from kafka.admin import KafkaAdminClient, NewTopic
 import boto3
 import pandas as pd
-
+import datetime
 
 # Get EEG data in csv format from S3. By default, MVP data will be fetched.
 def get_eeg_object_from_s3(my_subject_id, mybucket='speegs-source-chbmit'):
@@ -40,6 +40,9 @@ def produce_eeg_messages(p, my_subject_id):
             myvalue = f"{row[0]}:{row[channel]}"
             p.send(my_subject_id, key=mykey, value=myvalue)
 
+        mytimelog = str(row[0]) + "," + datetime.datetime.now().strftime("%Y-%m-%d, %H:%M:%S.%f")
+        p.send('timelog1', key='timelog', value=mytimelog)
+
     p.flush()
 
 
@@ -56,7 +59,7 @@ if __name__ == "__main__":
         bootstrap_servers='ip-10-0-0-8.ec2.internal:9092'
     )
 
-    initialize_topics(a, subject_id)
+#    initialize_topics(a, subject_id)
     produce_eeg_messages(p, subject_id)
 
 
