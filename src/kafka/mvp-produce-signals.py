@@ -18,7 +18,8 @@ kafka_admin_conf = {
     'bootstrap.servers': [
         'ip-10-0-0-8.ec2.internal:9092',
         'ip-10-0-0-11.ec2.internal:9092',
-        'ip-10-0-0-4.ec2.internal:9092']
+        'ip-10-0-0-4.ec2.internal:9092'],
+    'debug': 'broker,admin'
     }
 
 
@@ -30,7 +31,7 @@ def get_eeg_object_from_s3(mybucket='speegs-source-chbmit', mykey=f"{subject_id}
 
 
 # For development only
-async def delete_topics(a, topics):
+def delete_topics(a, topics):
     """ delete topics """
     # Call delete_topics to asynchronously delete topics, a future is returned.
     # By default this operation on the broker returns immediately while
@@ -38,7 +39,7 @@ async def delete_topics(a, topics):
     # to propagate in the cluster before returning.
     #
     # Returns a dict of <topic,future>.
-    fs = await a.delete_topics(topics, operation_timeout=30)
+    fs = a.delete_topics(topics, operation_timeout=30)
 
     # Wait for operation to finish.
     for topic, f in fs.items():
@@ -61,7 +62,7 @@ def initialize_topics(a, patients, retry_on_error=True):
             print (f"Failed to create topic {patients}: {e}")
             if retry_on_error:
                 print ("Will attempt to delete the topic and create it again...")
-                asyncio.run(delete_topics(a, topic))
+                delete_topics(a, list(topic))
 
 
 def produce_eeg_messages(p, patient):
@@ -96,8 +97,8 @@ def delivery_report(err, msg):
 
 if __name__ == "__main__":
 
-    p = Producer(config=kafka_producer_conf)
-    a = AdminClient(conf=kafka_admin_conf)
+    p = Producer(kafka_producer_conf)
+    a = AdminClient(kafka_admin_conf)
 
     initialize_topics(a, subject_id)
     produce_eeg_messages(p, subject_id)
