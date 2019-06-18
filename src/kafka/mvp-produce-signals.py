@@ -1,12 +1,14 @@
-from confluent_kafka import Producer
-from confluent_kafka.admin import AdminClient, NewTopic
-import asyncio
+# from confluent_kafka import Producer
+# from confluent_kafka.admin import AdminClient, NewTopic
+from kafka import KafkaProducer
+from kafka.admin import KafkaAdminClient, NewTopic
 import boto3
 import pandas as pd
 
 
 # DEV
 subject_id = 'chb01'
+"""
 kafka_producer_conf = {
     'bootstrap.servers': [
         'ip-10-0-0-8.ec2.internal:9092',
@@ -21,6 +23,7 @@ kafka_admin_conf = {
         'ip-10-0-0-4.ec2.internal:9092'],
     'debug': 'broker,admin'
     }
+"""
 
 
 # Get EEG data in csv format from S3. By default, MVP data will be fetched.
@@ -39,8 +42,9 @@ def delete_topics(a, topics):
     # to propagate in the cluster before returning.
     #
     # Returns a dict of <topic,future>.
-    fs = a.delete_topics(topics, operation_timeout=30)
-
+#    fs = a.delete_topics(topics, operation_timeout=30)
+    fs = a.delete_topics(topics, timeout_ms=20000)
+"""
     # Wait for operation to finish.
     for topic, f in fs.items():
         try:
@@ -48,11 +52,12 @@ def delete_topics(a, topics):
             print(f"Topic {topic} deleted")
         except Exception as e:
             print(f"Failed to delete topic {topic}: {e}")
+"""
 
 
 def initialize_topics(a, patients, retry_on_error=True):
-    patientTopics = list(map(lambda p: NewTopic(patients, 3, 3), patients))
-    fs = a.create_topics(patientTopics)
+    patienttopics = list(map(lambda p: NewTopic(patients, 3, 3), patients))
+    fs = a.create_topics(patienttopics)
 
     for topic, f in fs.items():
         try:
@@ -97,8 +102,11 @@ def delivery_report(err, msg):
 
 if __name__ == "__main__":
 
-    p = Producer(kafka_producer_conf)
-    a = AdminClient(kafka_admin_conf)
+    #    p = Producer(kafka_producer_conf)
+    #    a = AdminClient(kafka_admin_conf)
+    p = KafkaProducer(bootstrap_servers='ip-10-0-0-8.ec2.internal:9092')
+    a = KafkaAdminClient(bootstrap_servers='ip-10-0-0-8.ec2.internal:9092')
+
 
     initialize_topics(a, subject_id)
     produce_eeg_messages(p, subject_id)
