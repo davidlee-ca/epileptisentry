@@ -57,16 +57,13 @@ if __name__ == "__main__":
         for epoch_start_location in range(0, num_rows - epoch_width, epoch_step):
             ds = df[channel].to_numpy()[epoch_start_location:epoch_start_location + epoch_width]
 
-            print(f"Channel: {channel}, epoch_start_loc: {epoch_start_location}, epoch_width: {epoch_start_location + epoch_width}")
-
             app_entropy_raw = entropy.app_entropy(ds, order=2, metric='chebyshev')
             app_entropy_raw_surrogate = entropy.app_entropy(generate_surrogate_series(ds), order=2, metric='chebyshev')
             delta_apen_raw = app_entropy_raw_surrogate - app_entropy_raw
             [A3, D3, D2, D1] = get_delta_apen(ds)
             epoch_end_in_sec = epoch_start_location // sampling_frequency_in_hz + window_in_seconds
 
-            print(f"{epoch_start_location},{epoch_end_in_sec},{channel},{A3:.6f},{D3:.6f},{D2:.6f},{D1:.6f}")
-
+            print(f"Analyzed window ending at {epoch_end_in_sec}s")
             f.write(f"{epoch_start_location},{epoch_end_in_sec},{channel},{A3:.6f},{D3:.6f},{D2:.6f},{D1:.6f}")
 
     f.close()
