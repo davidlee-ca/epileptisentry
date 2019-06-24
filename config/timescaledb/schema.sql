@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS "eeg_data"(
 );
 
 SELECT create_hypertable('eeg_data', 'instrument_time');
-CREATE INDEX ON rides (subject_id, instrument_time DESC);
-CREATE INDEX ON rides (instrument_time DESC, subject_id);
-CREATE INDEX ON rides (channel, instrument_time DESC);
+CREATE INDEX ON eeg_data (subject_id, instrument_time DESC);
+CREATE INDEX ON eeg_data (instrument_time DESC, subject_id);
+CREATE INDEX ON eeg_data (channel, instrument_time DESC);
 
 /*
 DROP TABLE IF EXISTS "eeg_analysis";
