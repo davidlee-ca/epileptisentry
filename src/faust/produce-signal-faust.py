@@ -28,7 +28,7 @@ app = faust.App(
 my_topic = app.topic('eeg-signal', key_type=EEGKey, value_type=EEGReading)
 
 
-@app.timer(interval=0.5)
+@app.timer(interval=1)
 async def dev_message_producer(app):
 
     current_time = time()
