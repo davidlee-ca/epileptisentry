@@ -44,9 +44,9 @@ from pyspark import SparkContext
 from pyspark.streaming import StreamingContext
 from pyspark.streaming.kafka import KafkaUtils
 
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import explode
-from pyspark.sql.functions import split
+#from pyspark.sql import SparkSession
+#from pyspark.sql.functions import explode
+#from pyspark.sql.functions import split
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
@@ -63,11 +63,11 @@ if __name__ == "__main__":
 
     sc = SparkContext(appName="sparkStreamConsumerFromKafkaTest").getOrCreate()
     sc.setLogLevel("WARN")
-    ssc = StreamingContext(sc, 10)
-    spark = SparkSession(sc)
-    broker = ""
+    ssc = StreamingContext(sc, 5)
 
-    input_from_topic = KafkaUtils.createDirectStream(ssc, [topics], {"metadata.broker.list": boostrapServers})
+#   input_from_topic = KafkaUtils.createDirectStream(ssc, [topics], {"metadata.broker.list": bootstrapServers})
+    input_from_topic = KafkaUtils.createStream(ssc, "10.0.0.13:2181", "foo", {topics: 1})
+
 
     input_from_topic.pprint()
 
