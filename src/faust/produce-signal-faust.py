@@ -35,8 +35,6 @@ async def dev_message_producer(app):
     readings = str(obj._raw_stream.readline().strip()).split(',')
 
     for i in range(23):
-        if not 5 == i:
-            continue
         await my_topic.send(
             key=EEGKey(subject=subject_id, ch=channels[i]),
             value=EEGReading(timestamp=current_time, v=readings[i + 1])
