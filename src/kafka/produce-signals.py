@@ -5,7 +5,8 @@ import sys
 
 
 broker = "10.0.0.8:9092, 10.0.0.11:9092, 10.0.0.4:9092"
-topic = "eeg-data"
+topic = "eeg-signal"
+
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
@@ -28,22 +29,23 @@ if __name__ == '__main__':
     mykey = f"{subject_id}/{subject_id}_{replay_file_number}.csv"
 
     s3 = boto3.client('s3')
-    obj = s3.get_object(Bucket=mybucket, Key=mykey)
+    obj = s3.get_object(Bucket=mybucket, Key=mykey)['Body']
 
     start_time = time()
     channels = (
         'FP1-F7', 'F7-T7', 'T7-P7', 'P7-O1', 'FP1-F3', 'F3-C3', 'C3-P3', 'P3-O1', 'FP2-F4', 'F4-C4', 'C4-P4', 'P4-O2',
         'FP2-F8', 'F8-T8', 'T8-P8', 'P8-O2', 'FZ-CZ', 'CZ-PZ', 'P7-T7', 'T7-FT9', 'FT9-FT10', 'FT10-T8', 'T8-P8')
 
-    obj._raw_stream.readline() # throw away the first line
+    line = obj._raw_stream.readline() # throw away the first line
 
-    for line in obj._raw_stream.readline():
-        readings = str(mystring.strip()).split(',')
+    for line in obj._raw_stream:
+        readings = str(line.decode().strip()).split(',')
+
         for i in range(23):
-            key = '{"subject": "%s", "ch": "%s"' % subject_id, channels[i]
-            value = '{"timestamp": %.6f, "v": %.6f}' % start_time + float(readings[0]), float(readings[i + 1])
+            key = '{"subject": "%s", "ch": "%s"}' % (subject_id, channels[i])
+            value = '{"timestamp": %.6f, "v": %.6f}' % (start_time + float(readings[0]), float(readings[i + 1]))
             p.produce(topic, value=value, key=key)
-        sleep(1)  # tunable
-        p.poll(0)
+        sleep(0.003)  # tunable
+        p.flush()
 
     p.flush()
