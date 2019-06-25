@@ -1,10 +1,36 @@
 from pyspark import SparkContext
 from pyspark.streaming import StreamingContext
 from pyspark.streaming.kafka import KafkaUtils
-from json import loads
 from pyspark.sql import Row, SparkSession, SQLContext
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
+from json import loads
+import numpy as np
+import pywt
+import entropy
+
+
+# from StackExchange -- generate surrogate series!
+def generate_surrogate_series(ts):  # time-series is an array
+    ts_fourier  = np.fft.rfft(ts)
+    random_phases = np.exp(np.random.uniform(0,np.pi,len(ts)//2+1)*1.0j)
+    ts_fourier_new = ts_fourier*random_phases
+    new_ts = np.fft.irfft(ts_fourier_new)
+    return new_ts.tolist()
+
+
+def get_delta_apen(ts): # time-series is an array
+    # Perform discrete wavelet transform to get A3, D3, D2, D1 coefficient time series,
+    # and create corresponding surrogate time series
+    (cA1, cD1) = pywt.dwt(ts, 'db4')
+    (cA2, cD2) = pywt.dwt(cA1, 'db4')
+    cD2_surrogate = generate_surrogate_series(cD2)
+    app_entropy_sample = entropy.app_entropy(cD2, order=2, metric='chebyshev')
+    app_entropy_surrogate = entropy.app_entropy(cD2_surrogate, order=2, metric='chebyshev')
+
+    # Return the delta
+    delta_ApEns = app_entropy_surrogate - app_entropy_sample
+    return delta_ApEns
 
 
 def analyze_sample(rdd):
