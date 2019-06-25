@@ -43,6 +43,7 @@ import sys
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import explode
 from pyspark.sql.functions import split
+from pyspark.sql.functions import window
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
@@ -55,18 +56,18 @@ if __name__ == "__main__":
     subscribeType = sys.argv[2]
     topics = sys.argv[3]
 
-    spark = SparkSession\
-        .builder\
-        .appName("StructuredKafkaWordCount")\
+    spark = SparkSession \
+        .builder \
+        .appName("StructuredKafkaWordCount") \
         .getOrCreate()
 
     # Create DataSet representing the stream of input lines from kafka
-    lines = spark\
-        .readStream\
-        .format("kafka")\
-        .option("kafka.bootstrap.servers", bootstrapServers)\
-        .option(subscribeType, topics)\
-        .load()\
+    lines = spark \
+        .readStream \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", bootstrapServers) \
+        .option(subscribeType, topics) \
+        .load() \
         .selectExpr("CAST(value AS STRING)")
 
     # Split the lines into words
@@ -77,17 +78,17 @@ if __name__ == "__main__":
         ).alias('word')
     )
 
-    # das me
-    words.show()
-
     # Generate running word count
     wordCounts = words.groupBy('word').count()
 
+    # das me -
+    wordCounts2 = wordCounts.groupBy(window("eventTime", "10 second"))
+
     # Start running the query that prints the running counts to the console
-    query = wordCounts\
-        .writeStream\
-        .outputMode('complete')\
-        .format('console')\
+    query = wordCounts2 \
+        .writeStream \
+        .outputMode('complete') \
+        .format('console') \
         .start()
 
     query.awaitTermination()
