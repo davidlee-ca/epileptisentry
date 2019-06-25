@@ -41,7 +41,7 @@ def analyze_sample(rdd):
         schema = StructType([
                 StructField("patient_id", StringType(), nullable=False),
                 StructField("channel", StringType(), nullable=False),
-                StructField("timestamp", FloatType(), nullable=False),  # will turn into DateTime eventually
+                StructField("timestamp", DoubleType(), nullable=False),  # will turn into DateTime eventually
                 StructField("voltage", FloatType(), nullable=True)
         ])
 
@@ -54,9 +54,9 @@ def analyze_sample(rdd):
         seizure_indicator = get_delta_apen(timeseries)  # calculate the delta-approx. entropy as the seizure indicator
 
         # Print out the results
-        print(f"Readings: {readings}")
-        print(f"  sorted: {readings_sorted}")
-        print(f"Time Series: {timeseries}")
+#        print(f"Readings: {readings}")
+#        print(f"  sorted: {readings_sorted}")
+#        print(f"Time Series: {timeseries}")
         print(f"There are {len(timeseries)} elements in this series.")
         print(f"Seizure indicator = {seizure_indicator}")
 
@@ -64,7 +64,7 @@ def analyze_sample(rdd):
 if __name__ == "__main__":
 
     sc = SparkContext(appName="SparkStreamConsumerFromKafka").getOrCreate()
-    sc.setLogLevel("WARN")
+#    sc.setLogLevel("WARN")
     ssc = StreamingContext(sc, 2)
     spark = SparkSession(sc)
 
