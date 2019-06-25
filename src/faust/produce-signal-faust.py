@@ -32,12 +32,13 @@ my_topic = app.topic('eeg-signal', key_type=EEGKey, value_type=EEGReading)
 async def dev_message_producer(app):
 
     current_time = time()
-    readings = str(obj._raw_stream.readline().strip()).split(',')
+    mystring = obj._raw_stream.readline().decode()
+    readings = str(mystring.strip()).split(',')
 
     for i in range(23):
         await my_topic.send(
             key=EEGKey(subject=subject_id, ch=channels[i]),
-            value=EEGReading(timestamp=current_time, v=readings[i + 1])
+            value=EEGReading(timestamp=current_time, v=float(readings[i + 1]))
         )
 
 if __name__ == "__main__":
