@@ -9,6 +9,13 @@ import numpy as np
 import pywt
 import entropy
 
+# Schema for the dataframe
+schema = StructType([
+    StructField("patient_id", StringType(), nullable=False),
+    StructField("channel", StringType(), nullable=False),
+    StructField("timestamp", DoubleType(), nullable=False),  # will turn into DateTime eventually
+    StructField("voltage", FloatType(), nullable=True)
+])
 
 # from StackExchange -- generate surrogate series!
 def generate_surrogate_series(ts):  # time-series is an array
@@ -37,16 +44,8 @@ def analyze_sample(rdd):
 
     if not(rdd.isEmpty()):
 
-        # Schema for the dataframe
-        schema = StructType([
-                StructField("patient_id", StringType(), nullable=False),
-                StructField("channel", StringType(), nullable=False),
-                StructField("timestamp", DoubleType(), nullable=False),  # will turn into DateTime eventually
-                StructField("voltage", FloatType(), nullable=True)
-        ])
-
         df_input = spark.createDataFrame(rdd, schema)
-        df_input.show()
+#        df_input.show()
 
         readings = [(row.timestamp, row.voltage) for row in df_input.collect()]  # extract the readings
         readings_sorted = sorted(readings, key=lambda v: v[0])  # sort by timestamp: it should be mostly sorted already
@@ -77,7 +76,7 @@ if __name__ == "__main__":
     # for MVP - filter a single patient & a single channel
     filtered_input = parsed_input.filter(lambda x: (x[0] == "chb01") and (x[1] == "FP1-F3"))
 
-    # Create sliding window of 16 seconds, every 4 seconds
+    # Create sliding window of 16 seconds and run it every 4 seconds
     sliding_window_input = filtered_input.window(16, 4)
 
     # Make the call to the analysis function
