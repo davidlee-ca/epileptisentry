@@ -2,6 +2,7 @@
 import psycopg2
 from pyspark.sql import *
 from time import time
+from os import environ
 
 
 if __name__ == "__main__":
@@ -16,8 +17,18 @@ if __name__ == "__main__":
 
     df_raw = spark.createDataFrame([rawdata1, rawdata2, rawdata3])
     df_raw.show()
+
+    postgres_url = "jdbc:postgresql://ec2-3-215-187-200.compute-1.amazonaws.com:5432/speegs"
+    properties = {
+        "user": environ(['POSTGRES_USER']),
+        "password": environ(['POSTGRES_PASSSWORD'])
+    }
+
+    df_raw.write.jdbc(url=url, table="eeg_signal", properties=properties)
+
 """
-    df_raw.write \
+
+    df_raw.write.jdbc \
         .format("jdbc") \
         .option("url", "jdbc:ec2-3-215-187-200.compute-1.amazonaws.com:5432") \
         .option("dbtable", "speegs.eeg_data") \
