@@ -41,15 +41,24 @@ def analyze_sample(rdd):
         schema = StructType([
                 StructField("patient_id", StringType(), nullable=False),
                 StructField("channel", StringType(), nullable=False),
-                StructField("timestamp", FloatType(), nullable=False),
+                StructField("timestamp", FloatType(), nullable=False),  # will turn into DateTime eventually
                 StructField("voltage", FloatType(), nullable=True)
         ])
 
         df_input = spark.createDataFrame(rdd, schema)
         df_input.show()
 
-        timeseries = [row.voltage for row in df_input.collect()]
-        print(timeseries)
+        readings = [(row.timestamp, row.voltage) for row in df_input.collect()]  # extract the readings
+        readings_sorted = sorted(readings, key=lambda v: v[0])  # sort by timestamp: it should be mostly sorted already
+        timeseries = [v[1] for v in readings_sorted]  # extract only the time series
+        seizure_indicator = get_delta_apen(timeseries)  # calculate the delta-approx. entropy as the seizure indicator
+
+        # Print out the results
+        print(f"Readings: {readings}")
+        print(f"  sorted: {readings_sorted}")
+        print(f"Time Series: {timeseries}")
+        print(f"There are {len(timeseries)} elements in this series.")
+        print(f"Seizure indicator = {seizure_indicator}")
 
 
 if __name__ == "__main__":
