@@ -43,7 +43,6 @@ import sys
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import explode
 from pyspark.sql.functions import split
-from pyspark.sql.functions import window
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
@@ -81,11 +80,8 @@ if __name__ == "__main__":
     # Generate running word count
     wordCounts = words.groupBy('word').count()
 
-    # das me -
-    wordCounts2 = wordCounts.groupBy(window("eventTime", "10 second"))
-
     # Start running the query that prints the running counts to the console
-    query = wordCounts2 \
+    query = wordCounts \
         .writeStream \
         .outputMode('complete') \
         .format('console') \
