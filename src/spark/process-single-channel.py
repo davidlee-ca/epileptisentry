@@ -15,13 +15,14 @@ if __name__ == "__main__":
 
     # structure: subject_id, channel, instrument_timestamp, voltage
     parsed_input = parsed_input.map(lambda v: (v[0]["subject"], v[0]["ch"], v[1]["timestamp"], v[1]["v"]))
+    parsed_input.count()
     parsed_input.pprint()
-    parsed_input.foreachRDD(lambda x: x.count())
+
 
     # for MVP - filter a single
     filtered_input = parsed_input.filter(lambda x: (x[0] == "chb01") and (x[1] == "FP1-F3"))
+    filtered_input.count()
     filtered_input.pprint()
-    filtered_input.foreachRDD(lambda x: x.count())
 
     ssc.start()
     ssc.awaitTermination()
