@@ -1,5 +1,3 @@
-# there will be something here
-import psycopg2
 from pyspark import SparkContext
 from pyspark.sql import *
 from time import time

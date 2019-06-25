@@ -8,14 +8,22 @@ from json import loads
 import numpy as np
 import pywt
 import entropy
+import os
 
-# Schema for the dataframe
+
+# Schema for the raw data
 schema = StructType([
-    StructField("patient_id", StringType(), nullable=False),
+    StructField("subject_id", StringType(), nullable=False),
     StructField("channel", StringType(), nullable=False),
-    StructField("timestamp", DoubleType(), nullable=False),  # will turn into DateTime eventually
+    StructField("instr_time", DoubleType(), nullable=False),  # will turn into DateTime eventually
     StructField("voltage", FloatType(), nullable=True)
 ])
+
+postgres_url = "jdbc:postgresql://ec2-3-215-187-200.compute-1.amazonaws.com:5432/speegs"
+properties = {
+    "user": os.environ['POSTGRES_USER'],
+    "password": os.environ['POSTGRES_PASSWORD']
+
 
 # from StackExchange -- generate surrogate series!
 def generate_surrogate_series(ts):  # time-series is an array
@@ -50,20 +58,30 @@ def analyze_sample(rdd):
         readings = [(row.timestamp, row.voltage) for row in df_input.collect()]  # extract the readings
         readings_sorted = sorted(readings, key=lambda v: v[0])  # sort by timestamp: it should be mostly sorted already
         timeseries = [v[1] for v in readings_sorted]  # extract only the time series
+#        timeseries.collect()
+
         seizure_indicator = get_delta_apen(timeseries)  # calculate the delta-approx. entropy as the seizure indicator
+
+        print(f"                        There are {len(timeseries)} elements in this series.")
+        print(f"                        Seizure indicator = {seizure_indicator}")
+
+        analysis_row = Row(instr_time=max([v[0] for v in readings]), subject_id="chb01", channel="FP1-F3",
+                           seizure_metric=seizure_indicator, num_datapoints=len(timeseries))
+        df_analysis = spark.createDataFrame([analysis_row])
+
+        df_input.write.jdbc(url=postgres_url, table="eeg_data", mode="append", properties=properties)
+        df_analysis.write.jdbc(url=postgres_url, table="eeg_analysis", mode="append", properties=properties)
 
         # Print out the results
 #        print(f"Readings: {readings}")
 #        print(f"  sorted: {readings_sorted}")
 #        print(f"Time Series: {timeseries}")
-        print(f"There are {len(timeseries)} elements in this series.")
-        print(f"Seizure indicator = {seizure_indicator}")
 
 
 if __name__ == "__main__":
 
     sc = SparkContext(appName="SparkStreamConsumerFromKafka").getOrCreate()
-#    sc.setLogLevel("WARN")
+    sc.setLogLevel("ERROR")
     ssc = StreamingContext(sc, 2)
     spark = SparkSession(sc)
 
