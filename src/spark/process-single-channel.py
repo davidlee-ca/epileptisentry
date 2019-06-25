@@ -1,16 +1,29 @@
 from pyspark import SparkContext
 from pyspark.streaming import StreamingContext
 from pyspark.streaming.kafka import KafkaUtils
+from pyspark.rdd import *
 from json import loads
-from pyspark.sql import dataframe as d
+from pyspark.sql import Row, SparkSession, SQLContext
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+
 
 
 def analyze_sample(rdd):
-    if rdd.isEmpty():
-        print("RDD is empty")
-    else:
-        df = rdd.toDF()
-        df.show()
+
+    if (not(rdd.isEmpty())):
+
+        # Schema for the dataframe
+        schema = StructType([
+                StructField("patient_id", StringType(), nullable=False),
+                StructField("channel", StringType(), nullable=False),
+                StructField("timestamp", FloatType(), nullable=False),
+                StructField("voltage", FloatType(), nullable=True)
+        ])
+
+        df_input = spark.createDataFrame(rdd, schema)
+        df_input.show()
 
 
 if __name__ == "__main__":
@@ -18,6 +31,8 @@ if __name__ == "__main__":
     sc = SparkContext(appName="SparkStreamConsumerFromKafka").getOrCreate()
     sc.setLogLevel("WARN")
     ssc = StreamingContext(sc, 2)
+    spark = SparkSession(sc)
+#    sqlContext = SQLContext(sc)
 
     raw_topic = KafkaUtils.createStream(ssc, "10.0.0.13:2181", "sparkApplication", {"eeg-signal": 1})
     parsed_input = raw_topic.map(lambda v: (loads(v[0]), loads(v[1]))) # expect JSON serialization
@@ -34,11 +49,14 @@ if __name__ == "__main__":
     sliding_window_input = filtered_input.window(16, 4)
     sliding_window_input.pprint()
 
-    # Convert to dataframe and start analyzing
-    # df_input = sliding_window_input.toDF(["subject_id", "channel", "timestamp", "voltage"]).collect()
-
-    analyze_sample(sliding_window_input)
-
+    # Make the call to the analysis function
+    sliding_window_input.foreachRDD(analyze_sample)
 
     ssc.start()
     ssc.awaitTermination()
+
+"""
+
+
+    df_input.show()
+"""
