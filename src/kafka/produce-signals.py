@@ -4,7 +4,7 @@ import boto3
 import sys
 
 
-broker = "10.0.1.62:9092, 10.0.1.24:9092, 10.0.1.35:9092, 10.0.1.17:9092, 10.0.1.39:9092"
+broker = "10.0.1.62:9092,10.0.1.24:9092,10.0.1.35:9092,10.0.1.17:9092,10.0.1.39:9092"
 topic = "eeg-signal"
 
 
@@ -45,5 +45,5 @@ if __name__ == '__main__':
             key = '{"subject": "%s", "ch": "%s"}' % (subject_id, channels[i])
             value = '{"timestamp": %.6f, "v": %.6f}' % (start_time + float(readings[0]), float(readings[i + 1]))
             p.produce(topic, value=value, key=key)
-        sleep(0.002)  # tunable
+        sleep(0.0035)  # tunable
         p.flush()
