@@ -88,7 +88,7 @@ if __name__ == "__main__":
     ssc = StreamingContext(sc, 2)
     spark = SparkSession(sc)
 
-    raw_topic = KafkaUtils.createStream(ssc, "10.0.0.13:2181", "sparkApplication", {"eeg-signal": 1})
+    raw_topic = KafkaUtils.createStream(ssc, "10.0.1.24:2181,10.0.1.62:2181,10.0.1.35:2181,10.0.1.17:2181,10.0.1.39:2181", "sparkApplication", {"eeg-signal": 1})
     parsed_input = raw_topic.map(lambda v: (loads(v[0]), loads(v[1]))) # expect JSON serialization
 
     # structure: subject_id, channel, instrument_timestamp, voltage
