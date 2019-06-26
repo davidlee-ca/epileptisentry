@@ -20,7 +20,7 @@ schema = StructType([
     StructField("voltage", FloatType(), nullable=True)
 ])
 
-postgres_url = "jdbc:postgresql://ec2-3-215-187-200.compute-1.amazonaws.com:5432/speegs"
+postgres_url = "jdbc:postgresql://ip-10-0-1-32.ec2.internal:5432/speegs"
 properties = {
     "user": os.environ['POSTGRES_USER'],
     "password": os.environ['POSTGRES_PASSWORD']
