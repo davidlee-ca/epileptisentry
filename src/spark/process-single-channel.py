@@ -5,6 +5,7 @@ from pyspark.sql import Row, SparkSession, SQLContext
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 from json import loads
+from datetime import datetime as dt
 import numpy as np
 import pywt
 import entropy
@@ -15,7 +16,7 @@ import os
 schema = StructType([
     StructField("subject_id", StringType(), nullable=False),
     StructField("channel", StringType(), nullable=False),
-    StructField("instr_time", DoubleType(), nullable=False),  # will turn into DateTime eventually
+    StructField("instr_time", TimestampType(), nullable=False),  # will turn into DateTime eventually
     StructField("voltage", FloatType(), nullable=True)
 ])
 
@@ -23,7 +24,7 @@ postgres_url = "jdbc:postgresql://ip-10-0-1-32.ec2.internal:5432/speegs"
 properties = {
     "user": os.environ['POSTGRES_USER'],
     "password": os.environ['POSTGRES_PASSWORD']
-
+}
 
 # from StackExchange -- generate surrogate series!
 def generate_surrogate_series(ts):  # time-series is an array
@@ -45,7 +46,7 @@ def get_delta_apen(ts): # time-series is an array
 
     # Return the delta
     delta_ApEns = app_entropy_surrogate - app_entropy_sample
-    return delta_ApEns
+    return delta_ApEns.item()
 
 
 def analyze_sample(rdd):
@@ -53,20 +54,22 @@ def analyze_sample(rdd):
     if not(rdd.isEmpty()):
 
         df_input = spark.createDataFrame(rdd, schema)
-#        df_input.show()
 
-        readings = [(row.timestamp, row.voltage) for row in df_input.collect()]  # extract the readings
+        readings = [(row.instr_time, row.voltage) for row in df_input.collect()]  # extract the readings
         readings_sorted = sorted(readings, key=lambda v: v[0])  # sort by timestamp: it should be mostly sorted already
         timeseries = [v[1] for v in readings_sorted]  # extract only the time series
-#        timeseries.collect()
 
         seizure_indicator = get_delta_apen(timeseries)  # calculate the delta-approx. entropy as the seizure indicator
+        max_instr_time = df_input.select(max("instr_time")).collect()[0]["max(instr_time)"]  # it's a still a dataframe, so gotta extract the value
+        number_of_datapoints = len(timeseries)
 
+        print(f"                 Latest instrument timestamp: {max_instr_time}")
+        print(f"     {type(max_instr_time)}")
         print(f"                        There are {len(timeseries)} elements in this series.")
         print(f"                        Seizure indicator = {seizure_indicator}")
 
-        analysis_row = Row(instr_time=max([v[0] for v in readings]), subject_id="chb01", channel="FP1-F3",
-                           seizure_metric=seizure_indicator, num_datapoints=len(timeseries))
+        analysis_row = Row(instr_time=max_instr_time, subject_id="chb01", channel="FP1-F3",
+                           seizure_metric=seizure_indicator, num_datapoints=number_of_datapoints)
         df_analysis = spark.createDataFrame([analysis_row])
 
         df_input.write.jdbc(url=postgres_url, table="eeg_data", mode="append", properties=properties)
@@ -89,7 +92,7 @@ if __name__ == "__main__":
     parsed_input = raw_topic.map(lambda v: (loads(v[0]), loads(v[1]))) # expect JSON serialization
 
     # structure: subject_id, channel, instrument_timestamp, voltage
-    parsed_input = parsed_input.map(lambda v: (v[0]["subject"], v[0]["ch"], v[1]["timestamp"], v[1]["v"]))
+    parsed_input = parsed_input.map(lambda v: (v[0]["subject"], v[0]["ch"], dt.fromtimestamp(v[1]["timestamp"]), v[1]["v"]))
 
     # for MVP - filter a single patient & a single channel
     filtered_input = parsed_input.filter(lambda x: (x[0] == "chb01") and (x[1] == "FP1-F3"))
