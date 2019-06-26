@@ -4,7 +4,7 @@ import boto3
 import sys
 
 
-broker = "10.0.0.8:9092, 10.0.0.11:9092, 10.0.0.4:9092"
+broker = "10.0.1.62:9092, 10.0.1.24:9092, 10.0.1.35:9092, 10.0.1.17:9092, 10.0.1.39:9092"
 topic = "eeg-signal"
 
 
@@ -47,5 +47,3 @@ if __name__ == '__main__':
             p.produce(topic, value=value, key=key)
         sleep(0.002)  # tunable
         p.flush()
-
-    p.flush()
