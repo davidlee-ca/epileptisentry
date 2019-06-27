@@ -93,6 +93,10 @@ if __name__ == "__main__":
         .appName("ProcessSingleSubject") \
         .getOrCreate()
 
+    # Suppress the console output's INFO and WARN
+    # https://stackoverflow.com/questions/27781187/how-to-stop-info-messages-displaying-on-spark-console
+    spark.sparkContext.setLogLevel("ERROR")
+
     # Subscribe to a Kafka topic:
     # https://spark.apache.org/docs/latest/structured-streaming-kafka-integration.html#creating-a-kafka-source-for-streaming-queries
     dfstreamRaw = spark \
@@ -101,12 +105,16 @@ if __name__ == "__main__":
         .option("kafka.bootstrap.servers", "ip-10-0-1-24.ec2.internal:9092,ip-10-0-1-62.ec2.internal:9092") \
         .option("subscribe", "eeg-signal") \
         .load()
-    dfstreamRaw.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
+
+    foo = dfstreamRaw.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
     # full list of Kafka brokers: "ip-10-0-1-24.ec2.internal:9092,ip-10-0-1-62.ec2.internal:9092,ip-10-0-1-17.ec2.internal:9092,ip-10-0-1-35.ec2.internal:9092,ip-10-0-1-39.ec2.internal:9092"
 
-    dfstreamRaw.show()
+    dfstreamWrite = foo\
+        .writeStream\
+        .format('console')\
+        .start()
 
-    dfstreamRaw.awaitTermination()
+    dfstreamWrite.awaitTermination()
 
 """
     dfstreamWindowed = dfstreamRaw \
