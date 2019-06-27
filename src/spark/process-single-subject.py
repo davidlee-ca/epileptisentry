@@ -2,28 +2,20 @@ from pyspark.sql import Row, SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.group import *
 from pyspark.sql.types import *
-
-"""
-from datetime import datetime as dt
+import operator
 import numpy as np
 import pywt
 import entropy
 import os
+
+"""
+from datetime import datetime as dt
 
 
 from pyspark import SparkContext
 from pyspark.streaming import StreamingContext
 from pyspark.streaming.kafka import KafkaUtils
 """
-"""
-# Schema for the raw data
-# in v2, no subject_id -- it'll stay constant
-schema = StructType([
-    StructField("channel", StringType(), nullable=False),
-    StructField("instr_time", TimestampType(), nullable=False),  # will turn into DateTime eventually
-    StructField("voltage", FloatType(), nullable=True)
-])
-
 postgres_url = "jdbc:postgresql://ip-10-0-1-32.ec2.internal:5432/speegs"
 properties = {
     "user": os.environ['POSTGRES_USER'],
@@ -40,10 +32,11 @@ def generate_surrogate_series(ts):  # time-series is an array
 
 
 def get_delta_apen(ts): # time-series is an array
-    # Perform discrete wavelet transform to get A3, D3, D2, D1 coefficient time series,
+    # Perform discrete wavelet transform to get D2 coefficient time series,
     # and create corresponding surrogate time series
-    (cA1, cD1) = pywt.dwt(ts, 'db4')
-    (cA2, cD2) = pywt.dwt(cA1, 'db4')
+    # (cA1, cD1) = pywt.dwt(ts, 'db4')
+    # (cA2, cD2) = pywt.dwt(cA1, 'db4')
+    cD2 = pywt.downcoef('d', ts, 'db4', level=2)
     cD2_surrogate = generate_surrogate_series(cD2)
     app_entropy_sample = entropy.app_entropy(cD2, order=2, metric='chebyshev')
     app_entropy_surrogate = entropy.app_entropy(cD2_surrogate, order=2, metric='chebyshev')
@@ -53,6 +46,16 @@ def get_delta_apen(ts): # time-series is an array
     return delta_ApEns.item()
 
 
+def analyze_time_series(l):
+
+    if len(l) == 0:
+        return 0
+
+    else:
+        seizure_indicator = get_delta_apen(l)  # calculate the delta-approx. entropy as the seizure indicator
+        return seizure_indicator
+
+"""
 def analyze_sample(rdd):
 
     if not(rdd.isEmpty()):
@@ -119,29 +122,47 @@ if __name__ == "__main__":
         get_json_object(dfstreamStr.value, "$.v").cast(FloatType()).alias("voltage")
     )
 
-    dfParse = dfParse.filter(dfParse.channel.contains('F7-T7')) # filter a channel for now
-    dfParseX = dfParse.writeStream.format('console').start()
+    # DEBUG - show the raw parsed data
+    # dfParseX = dfParse.writeStream.format('console').start()
 
-    # Window this into 16-second windows hopping at 4 seconds -- INSTRUMENT TIME
+    # Window this into 16-second windows hopping at 4 seconds -- INSTRUMENT TIME, not real time!
+    # It will ensure that I will have 4096 data points at each bin
     dfWindow = dfParse \
         .groupby(
             window(
                 col("instr_time"), "16 seconds", "4 second"),
-                "patient",
+                "subject_id",
                 "channel")
-        .agg(count("*"))
+        .agg(collect_list(struct("instr_time", "voltage")))
+        .alias("time_series")
 
-#    dfWindow.printSchema()
-    dfWindow2 = dfWindow.select('window.start', 'window.end', 'channel', 'count(1)')
+    # Help function that will sort the grouped time series
+    # https://stackoverflow.com/questions/46580253/collect-list-by-preserving-order-based-on-another-variable
+    def sort_time_series(l):
+        res = sorted(l, key=operator.itemgetter(0))
+        return [item[1] for item in res]
 
+    sort_udf = udf(sort_time_series)
 
-    dfstreamWrite = dfWindow2 \
+    dfAnalysis = dfWindow.select(
+        dfWindow.window.end.alias("instr_time"),
+        dfWindow.subject_id,
+        dfWindow.channel,
+        sort_udf(dfWindow.time_series)
+    )
+
+    # DEBUG - show schemas
+    dfWindow.printSchema()
+    dfAnalysis.printSchema()
+    # dfWindow2 = dfWindow.select('window.start', 'window.end', 'channel', 'count(1)')
+
+    dfstreamWrite = dfAnalysis \
         .writeStream \
         .outputMode("complete") \
         .format('console') \
         .start()
 
-    dfParseX.awaitTermination()
+    # dfParseX.awaitTermination()
     dfstreamWrite.awaitTermination()
 
 """
