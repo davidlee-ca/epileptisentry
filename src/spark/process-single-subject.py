@@ -46,15 +46,6 @@ def get_delta_apen(ts): # time-series is an array
     return delta_ApEns.item()
 
 
-def analyze_time_series(l):
-
-    if len(l) == 0:
-        return 0
-
-    else:
-        seizure_indicator = get_delta_apen(l)  # calculate the delta-approx. entropy as the seizure indicator
-        return seizure_indicator
-
 """
 def analyze_sample(rdd):
 
@@ -87,6 +78,7 @@ def analyze_sample(rdd):
 #        print(f"  sorted: {readings_sorted}")
 #        print(f"Time Series: {timeseries}")
 """
+
 
 if __name__ == "__main__":
 
@@ -128,33 +120,34 @@ if __name__ == "__main__":
     # Window this into 16-second windows hopping at 4 seconds -- INSTRUMENT TIME, not real time!
     # It will ensure that I will have 4096 data points at each bin
     dfWindow = dfParse \
-        .groupby(
-            window(
-                col("instr_time"), "16 seconds", "4 second"),
-                "subject_id",
-                "channel")
-        .agg(collect_list(struct("instr_time", "voltage")))
-        .alias("time_series")
+        .groupby(window(col("instr_time"), "16 seconds", "4 seconds"), "subject_id", "channel") \
+        .agg(collect_list(struct("instr_time", "voltage")).alias("time_series"))
 
     # Help function that will sort the grouped time series
     # https://stackoverflow.com/questions/46580253/collect-list-by-preserving-order-based-on-another-variable
-    def sort_time_series(l):
-        res = sorted(l, key=operator.itemgetter(0))
-        return [item[1] for item in res]
+    def sort_and_analyze_time_series(l):
+        if len(l) < 4000:
+            return None
 
-    sort_udf = udf(sort_time_series)
+        res = sorted(l, key=operator.itemgetter(0))
+        time_series = [item[1] for item in res]
+        seizure_indicator = get_delta_apen(time_series)
+        return seizure_indicator
+
+    analyze_udf = udf(sort_and_analyze_time_series)
+    count_udf = udf(lambda x: len(x))
+
+    # dfWindow.printSchema()
+    # dfWindow2 = dfWindow.select('window.end', 'subject_id', 'channel', 'time_series')
+    # dfWindow2.printSchema()
 
     dfAnalysis = dfWindow.select(
-        dfWindow.window.end.alias("instr_time"),
-        dfWindow.subject_id,
-        dfWindow.channel,
-        sort_udf(dfWindow.time_series)
+        col("window.end").alias("instr_time"),
+        "subject_id",
+        "channel",
+        analyze_udf(dfWindow.time_series).cast(FloatType()).alias("seizure_metric"),
+        count_udf(dfWindow.time_series).cast(IntegerType()).alias("num_datapoints")
     )
-
-    # DEBUG - show schemas
-    dfWindow.printSchema()
-    dfAnalysis.printSchema()
-    # dfWindow2 = dfWindow.select('window.start', 'window.end', 'channel', 'count(1)')
 
     dfstreamWrite = dfAnalysis \
         .writeStream \
@@ -164,6 +157,10 @@ if __name__ == "__main__":
 
     # dfParseX.awaitTermination()
     dfstreamWrite.awaitTermination()
+
+"""
+"""
+
 
 """
     # Group by subject and and then by channel
