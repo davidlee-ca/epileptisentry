@@ -114,6 +114,7 @@ if __name__ == "__main__":
 
     # For appending to the analysis results, filter out null (not ready to commit).
     dfAnalysisFiltered = dfAnalysis.where("seizure_metric is not null")
+    dfAnalysisFiltered.printSchema()
 
     # Pass on raw data in periodic batches
     dfRawWrite = dfParse.writeStream \
@@ -123,10 +124,9 @@ if __name__ == "__main__":
         .start()
 
     # for dfAnalysis, write as soon as they become available
-    dfAnalysisWrite = dfAnalysis.writeStream \
+    dfAnalysisWrite = dfAnalysisFiltered.writeStream \
         .outputMode("append") \
-        .foreach(postgres_batch_analyzed) \
-        .trigger(processingTime="2 seconds") \
+        .foreachBatch(postgres_batch_analyzed) \
         .start()
 
     dfRawWrite.awaitTermination()
