@@ -1,7 +1,8 @@
 from pyspark.sql import Row, SparkSession
-"""
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
+
+"""
 from json import loads
 from datetime import datetime as dt
 import numpy as np
@@ -99,15 +100,24 @@ if __name__ == "__main__":
 
     # Subscribe to a Kafka topic:
     # https://spark.apache.org/docs/latest/structured-streaming-kafka-integration.html#creating-a-kafka-source-for-streaming-queries
-    dfstreamRaw = spark \
+    dfstream = spark \
         .readStream \
         .format("kafka") \
         .option("kafka.bootstrap.servers", "ip-10-0-1-24.ec2.internal:9092,ip-10-0-1-62.ec2.internal:9092") \
         .option("subscribe", "eeg-signal") \
         .load()
-
-    foo = dfstreamRaw.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
     # full list of Kafka brokers: "ip-10-0-1-24.ec2.internal:9092,ip-10-0-1-62.ec2.internal:9092,ip-10-0-1-17.ec2.internal:9092,ip-10-0-1-35.ec2.internal:9092,ip-10-0-1-39.ec2.internal:9092"
+
+    # Parse this into a schema: channel from key, instrument timestamp and voltage from value
+    # You can parson JSON using DataFrame functions
+    # https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.functions.get_json_object
+    #
+    # foo = dfstreamRaw.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
+    foo = dfstream.select(
+        get_json_object(dfstream.key, "$.ch").alias("channel"),
+        get_json_object(dfstream.value, "$.timestamp").alias("instr_time"),
+        get_json_object(dfstream.value, "$.v").alias("voltage")
+    )
 
     dfstreamWrite = foo\
         .writeStream\
