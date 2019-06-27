@@ -119,11 +119,32 @@ if __name__ == "__main__":
         get_json_object(dfstreamStr.value, "$.v").cast(FloatType()).alias("voltage")
     )
 
-    # Window this into 4-second windows
-    dfWindow = dfParse.groupby(
-        window(dfParse.timestamp, "3 seconds")
-    )
+    dfParse = dfParse.filter(dfParse.channel.contains('F7-T7')) # filter a channel for now
+    dfParseX = dfParse.writeStream.format('console').start()
 
+    # Window this into 16-second windows hopping at 4 seconds -- INSTRUMENT TIME
+    dfWindow = dfParse \
+        .groupby(
+            window(
+                col("instr_time"), "16 seconds", "4 second"),
+                "patient",
+                "channel")
+        .agg(count("*"))
+
+#    dfWindow.printSchema()
+    dfWindow2 = dfWindow.select('window.start', 'window.end', 'channel', 'count(1)')
+
+
+    dfstreamWrite = dfWindow2 \
+        .writeStream \
+        .outputMode("complete") \
+        .format('console') \
+        .start()
+
+    dfParseX.awaitTermination()
+    dfstreamWrite.awaitTermination()
+
+"""
     # Group by subject and and then by channel
     # You can group by multiple columns:
     # https://stackoverflow.com/questions/41771327/spark-dataframe-groupby-multiple-times
@@ -131,13 +152,10 @@ if __name__ == "__main__":
         .groupBy("subject_id", "channel")
         .agg({"timestamp": "count"})
         .alias("count")
+"""
 
-    dfstreamWrite = dfGroup\
-        .writeStream\
-        .format('console')\
-        .start()
 
-    dfstreamWrite.awaitTermination()
+
 
 """
     dfstreamWindowed = dfstreamRaw \
