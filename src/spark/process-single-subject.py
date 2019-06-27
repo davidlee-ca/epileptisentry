@@ -1,9 +1,9 @@
 from pyspark.sql import Row, SparkSession
 from pyspark.sql.functions import *
+from pyspark.sql.group import *
 from pyspark.sql.types import *
 
 """
-from json import loads
 from datetime import datetime as dt
 import numpy as np
 import pywt
@@ -111,18 +111,28 @@ if __name__ == "__main__":
     # Parse this into a schema: channel from key, instrument timestamp and voltage from value
     # You can parson JSON using DataFrame functions
     # https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.functions.get_json_object
-    #
-    foo = dfstream.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
-    bar = foo.select(
-        get_json_object(foo.key, "$subject").cast(StringType()).alias("subject_id"),
-        get_json_object(foo.key, "$.ch").cast(StringType()).alias("channel"),
-        from_unixtime(get_json_object(foo.value, "$.timestamp").cast(DoubleType())).cast(TimestampType()).alias("instr_time"),
-        get_json_object(foo.value, "$.v").cast(FloatType()).alias("voltage")
+    dfstreamStr = dfstream.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
+    dfParse = dfstreamStr.select(
+        get_json_object(dfstreamStr.key, "$.subject").cast(StringType()).alias("subject_id"),
+        get_json_object(dfstreamStr.key, "$.ch").cast(StringType()).alias("channel"),
+        from_unixtime(get_json_object(dfstreamStr.value, "$.timestamp").cast(DoubleType())).cast(TimestampType()).alias("instr_time"),
+        get_json_object(dfstreamStr.value, "$.v").cast(FloatType()).alias("voltage")
     )
 
-    bar.printSchema()
+    # Window this into 4-second windows
+    dfWindow = dfParse.groupby(
+        window(dfParse.timestamp, "3 seconds")
+    )
 
-    dfstreamWrite = bar\
+    # Group by subject and and then by channel
+    # You can group by multiple columns:
+    # https://stackoverflow.com/questions/41771327/spark-dataframe-groupby-multiple-times
+    dfGroup = dfWindow \
+        .groupBy("subject_id", "channel")
+        .agg({"timestamp": "count"})
+        .alias("count")
+
+    dfstreamWrite = dfGroup\
         .writeStream\
         .format('console')\
         .start()
