@@ -112,14 +112,17 @@ if __name__ == "__main__":
     # You can parson JSON using DataFrame functions
     # https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.functions.get_json_object
     #
-    # foo = dfstreamRaw.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
-    foo = dfstream.select(
-        get_json_object(dfstream.key, "$.ch").alias("channel"),
-        get_json_object(dfstream.value, "$.timestamp").alias("instr_time"),
-        get_json_object(dfstream.value, "$.v").alias("voltage")
+    foo = dfstream.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
+    bar = foo.select(
+        get_json_object(foo.key, "$subject").cast(StringType()).alias("subject_id"),
+        get_json_object(foo.key, "$.ch").cast(StringType()).alias("channel"),
+        from_unixtime(get_json_object(foo.value, "$.timestamp").cast(DoubleType())).cast(TimestampType()).alias("instr_time"),
+        get_json_object(foo.value, "$.v").cast(FloatType()).alias("voltage")
     )
 
-    dfstreamWrite = foo\
+    bar.printSchema()
+
+    dfstreamWrite = bar\
         .writeStream\
         .format('console')\
         .start()
