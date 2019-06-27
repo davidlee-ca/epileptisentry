@@ -8,7 +8,6 @@ import entropy
 import os
 
 
-
 # from StackExchange -- generate surrogate series!
 def generate_surrogate_series(ts):  # time-series is an array
     ts_fourier  = np.fft.rfft(ts)
@@ -31,33 +30,23 @@ def get_delta_apen(ts): # time-series is an array
     return delta_ApEns.item()
 
 
-"""
-
-        df_input.write.jdbc(url=postgres_url, table="eeg_data", mode="append", properties=properties)
-        df_analysis.write.jdbc(url=postgres_url, table="eeg_analysis", mode="append", properties=properties)
-
-        # Print out the results
-#        print(f"Readings: {readings}")
-#        print(f"  sorted: {readings_sorted}")
-#        print(f"Time Series: {timeseries}")
-"""
-
 postgres_url = "jdbc:postgresql://ip-10-0-1-32.ec2.internal:5432/speegs"
-postgresql_properties = {
+postgres_properties = {
     "user": os.environ['POSTGRES_USER'],
     "password": os.environ['POSTGRES_PASSWORD']
 }
 
 
-def postgres_batch_sink(df, epoch_id, tablename=None):
+def postgres_batch_raw(df, epoch_id):
+    # foreachBatch write sink; helper for writing streaming dataFrames
+    df.write.jdbc(url=postgres_url, table="eeg_data", mode="append", properties=postgres_properties)
 
-    df.write.jdbc(url=postgres_url, table=tablename, mode="append", properties=postgresql_properties)
-
-
+def postgres_batch_analyzed(df, epoch_id):
+    # foreachBatch write sink; helper for writing streaming dataFrames
+    df.write.jdbc(url=postgres_url, table="eeg_analysis", mode="append", properties=postgres_properties)
 
 
 if __name__ == "__main__":
-
     # Create a local SparkSession:
     # https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html#quick-example
     spark = SparkSession \
@@ -97,6 +86,7 @@ if __name__ == "__main__":
     # You can group by multiple columns:
     # https://stackoverflow.com/questions/41771327/spark-dataframe-groupby-multiple-times
     dfWindow = dfParse \
+        .withWatermark("instr_time", "4 seconds") \
         .groupby(window(col("instr_time"), "16 seconds", "4 seconds"), "subject_id", "channel") \
         .agg(collect_list(struct("instr_time", "voltage")).alias("time_series"))
 
@@ -114,10 +104,6 @@ if __name__ == "__main__":
     analyze_udf = udf(sort_and_analyze_time_series)
     count_udf = udf(lambda x: len(x))
 
-    # dfWindow.printSchema()
-    # dfWindow2 = dfWindow.select('window.end', 'subject_id', 'channel', 'time_series')
-    # dfWindow2.printSchema()
-
     dfAnalysis = dfWindow.select(
         col("window.end").alias("instr_time"),
         "subject_id",
@@ -129,6 +115,25 @@ if __name__ == "__main__":
     # For appending to the analysis results, filter out null (not ready to commit).
     dfAnalysisFiltered = dfAnalysis.where("seizure_metric is not null")
 
+    # Pass on raw data in periodic batches
+    dfRawWrite = dfParse.writeStream \
+        .outputMode("append") \
+        .foreachBatch(postgres_batch_raw) \
+        .trigger(processingTime="2 seconds") \
+        .start()
+
+    # for dfAnalysis, write as soon as they become available
+    dfAnalysisWrite = dfAnalysis.writeStream \
+        .outputMode("append") \
+        .foreach(postgres_batch_analyzed) \
+        .trigger(processingTime="2 seconds") \
+        .start()
+
+    dfRawWrite.awaitTermination()
+    dfAnalysisWrite.awaitTermination()
+
+"""
+    # DEBUG
     dfstreamWrite = dfAnalysis \
         .writeStream \
         .outputMode("complete") \
@@ -137,30 +142,12 @@ if __name__ == "__main__":
 
     dfConsoleWrite = dfAnalysisFiltered \
         .writeStream \
-        .outputMode("complete") \
+        .outputMode("append") \
         .format('console') \
         .start()
 
     dfstreamWrite.awaitTermination()
     dfConsoleWrite.awaitTermination()
-
-"""
-    # Pass on raw data in periodic batches
-    dfRawWrite = dfParse.writeStream \
-        .writeStream \
-        .outputMode("append") \
-        .foreachBatch(postgres_batch_sink(tablename="eeg-data")) \
-        .option("truncate", false) \
-        .trigger(processingTime="4 seconds")\
-        .start()
-
-    # for dfAnalysis, write as soon as they become available
-    dfAnalysisWrite = dfAnalysis.writeStream \
-        .writeStream \
-        .outputMode("append") \
-        .foreach(postgres_batch_sink(tablename="eeg-analysis")) \
-        .option("truncate", false) \
-        .start()
 """
 
 
