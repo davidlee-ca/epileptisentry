@@ -5,8 +5,6 @@ import sys
 
 
 broker = "10.0.1.62:9092,10.0.1.24:9092,10.0.1.35:9092,10.0.1.17:9092,10.0.1.39:9092"
-topic = "eeg-signal"
-
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
@@ -15,6 +13,7 @@ if __name__ == '__main__':
 
     subject_id = sys.argv[1]
     replay_file_number = sys.argv[2]
+    topic = "eeg-signal"
 
     # Producer configuration
     # See https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
