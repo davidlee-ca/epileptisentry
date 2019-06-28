@@ -30,7 +30,6 @@ def get_delta_apen(ts): # time-series is an array
     return delta_ApEns.item()
 
 
-postgres_url = "jdbc:postgresql://ip-10-0-1-32.ec2.internal:5432/speegs"
 postgres_properties = {
     "user": os.environ['POSTGRES_USER'],
     "password": os.environ['POSTGRES_PASSWORD']
@@ -39,11 +38,19 @@ postgres_properties = {
 
 def postgres_batch_raw(df, epoch_id):
     # foreachBatch write sink; helper for writing streaming dataFrames
-    df.write.jdbc(url=postgres_url, table="eeg_data", mode="append", properties=postgres_properties)
+    df.write.jdbc(
+        url="jdbc:postgresql://ip-10-0-1-33.ec2.internal:5432/speegs",
+        table="eeg_data",
+        mode="append",
+        properties=postgres_properties)
 
 def postgres_batch_analyzed(df, epoch_id):
     # foreachBatch write sink; helper for writing streaming dataFrames
-    df.write.jdbc(url=postgres_url, table="eeg_analysis", mode="append", properties=postgres_properties)
+    df.write.jdbc(
+        url="jdbc:postgresql://ip-10-0-1-32.ec2.internal:5432/speegs",
+        table="eeg_analysis",
+        mode="append",
+        properties=postgres_properties)
 
 
 if __name__ == "__main__":
@@ -66,7 +73,6 @@ if __name__ == "__main__":
         .option("kafka.bootstrap.servers", "ip-10-0-1-24.ec2.internal:9092,ip-10-0-1-62.ec2.internal:9092") \
         .option("subscribe", "eeg-signal") \
         .load()
-    # full list of Kafka brokers: "ip-10-0-1-24.ec2.internal:9092,ip-10-0-1-62.ec2.internal:9092,ip-10-0-1-17.ec2.internal:9092,ip-10-0-1-35.ec2.internal:9092,ip-10-0-1-39.ec2.internal:9092"
 
     # Parse this into a schema: channel from key, instrument timestamp and voltage from value
     # You can parson JSON using DataFrame functions
@@ -104,6 +110,7 @@ if __name__ == "__main__":
     analyze_udf = udf(sort_and_analyze_time_series)
     count_udf = udf(lambda x: len(x))
 
+    # Apply the UDF to the time time series of voltage and obtain the seizure metric
     dfAnalysis = dfWindow.select(
         col("window.end").alias("instr_time"),
         "subject_id",
@@ -114,13 +121,12 @@ if __name__ == "__main__":
 
     # For appending to the analysis results, filter out null (not ready to commit).
     dfAnalysisFiltered = dfAnalysis.where("seizure_metric is not null")
-    dfAnalysisFiltered.printSchema()
 
     # Pass on raw data in periodic batches
     dfRawWrite = dfParse.writeStream \
         .outputMode("append") \
         .foreachBatch(postgres_batch_raw) \
-        .trigger(processingTime="2 seconds") \
+        .trigger(processingTime="4 seconds") \
         .start()
 
     # for dfAnalysis, write as soon as they become available
@@ -131,23 +137,3 @@ if __name__ == "__main__":
 
     dfRawWrite.awaitTermination()
     dfAnalysisWrite.awaitTermination()
-
-"""
-    # DEBUG
-    dfstreamWrite = dfAnalysis \
-        .writeStream \
-        .outputMode("complete") \
-        .format('console') \
-        .start()
-
-    dfConsoleWrite = dfAnalysisFiltered \
-        .writeStream \
-        .outputMode("append") \
-        .format('console') \
-        .start()
-
-    dfstreamWrite.awaitTermination()
-    dfConsoleWrite.awaitTermination()
-"""
-
-
