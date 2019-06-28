@@ -37,6 +37,8 @@ if __name__ == '__main__':
 
     line = obj._raw_stream.readline() # throw away the first line
 
+    count = 0
+    heartbeat = time()
     for line in obj._raw_stream:
         readings = str(line.decode().strip()).split(',')
 
@@ -44,5 +46,13 @@ if __name__ == '__main__':
             key = '{"subject": "%s", "ch": "%s"}' % (subject_id, channels[i])
             value = '{"timestamp": %.6f, "v": %.6f}' % (start_time + float(readings[0]), float(readings[i + 1]))
             p.produce(topic, value=value, key=key)
-        sleep(0.0035)  # tunable
+        sleep(0.0025)  # tunable
         p.flush()
+
+        count += 1
+        if count == 1280:
+            new_heartbeat = time()
+            deviation = (new_heartbeat - heartbeat - 10.0) * 1000
+            print(f"10-second check in for {subject_id}. Deviation: {deviation:.2f} milliseconds.")
+            count = 0
+            heartbeat = new_heartbeat
