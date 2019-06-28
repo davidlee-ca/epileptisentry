@@ -39,7 +39,7 @@ postgres_properties = {
 def postgres_batch_raw(df, epoch_id):
     # foreachBatch write sink; helper for writing streaming dataFrames
     df.write.jdbc(
-        url="jdbc:postgresql://ip-10-0-1-33.ec2.internal:5432/speegs",
+        url="jdbc:postgresql://ip-10-0-1-31.ec2.internal:5432/speegs",
         table="eeg_data",
         mode="append",
         properties=postgres_properties)
