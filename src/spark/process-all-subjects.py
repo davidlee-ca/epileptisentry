@@ -93,8 +93,9 @@ if __name__ == "__main__":
     # You can group by multiple columns:
     # https://stackoverflow.com/questions/41771327/spark-dataframe-groupby-multiple-times
     dfWindow = dfParse \
+        .groupby("subject_id", "channel") \
         .withWatermark("instr_time", "5 seconds") \
-        .groupby(window(col("instr_time"), "16 seconds", "4 seconds"), "subject_id", "channel") \
+        .groupby(window(col("instr_time"), "16 seconds", "4 seconds")) \
         .agg(collect_list(struct("instr_time", "voltage")).alias("time_series"))
 
     # Help function that will sort the grouped time series
