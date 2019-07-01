@@ -46,7 +46,7 @@ if __name__ == '__main__':
             key = '{"subject": "%s", "ch": "%s"}' % (subject_id, channels[i])
             value = '{"timestamp": %.6f, "v": %.6f}' % (start_time + float(readings[0]), float(readings[i + 1]))
             p.produce(topic, value=value, key=key)
-        sleep(0.003)  # tunable -- 2ms worked well for 4, see if 1ms sleep will reduce the deviation
+        sleep(0.0032)  # tunable -- 2ms worked well for 4, see if 1ms sleep will reduce the deviation
         p.flush()
 
         count += 1
