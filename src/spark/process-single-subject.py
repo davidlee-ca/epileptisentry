@@ -6,6 +6,7 @@ import numpy as np
 import pywt
 import entropy
 import os
+import sys
 
 
 # from StackExchange -- generate surrogate series!
@@ -35,6 +36,7 @@ postgres_properties = {
     "user": os.environ['POSTGRES_USER'],
     "password": os.environ['POSTGRES_PASSWORD']
 }
+kafka_brokers="ip-10-0-1-24.ec2.internal:9092,ip-10-0-1-62.ec2.internal:9092,ip-10-0-1-17.ec2.internal:9092"
 
 
 def postgres_batch_raw(df, epoch_id):
@@ -55,11 +57,21 @@ def postgres_batch_analyzed(df, epoch_id):
 
 
 if __name__ == "__main__":
+
+    # Check for argument: expect the subject ID
+    if len(sys.argv) != 2:
+        sys.stderr.write('Usage: %s <subject_id>\n' % sys.argv[0])
+        sys.exit(1)
+
+    subject_id = sys.argv[1]
+    topic = "eeg-signal-" + subject_id
+
+
     # Create a local SparkSession:
     # https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html#quick-example
     spark = SparkSession \
         .builder \
-        .appName("EEGProcessAllSubjects") \
+        .appName("ProcessSingleSubjects") \
         .getOrCreate()
 
     # Suppress the console output's INFO and WARN
@@ -71,8 +83,8 @@ if __name__ == "__main__":
     dfstream = spark \
         .readStream \
         .format("kafka") \
-        .option("kafka.bootstrap.servers", "ip-10-0-1-24.ec2.internal:9092,ip-10-0-1-62.ec2.internal:9092") \
-        .option("subscribe", "eeg-signal") \
+        .option("kafka.bootstrap.servers", kafka_brokers) \
+        .option("subscribe", topic) \
         .load()
 
     # Parse this into a schema: channel from key, instrument timestamp and voltage from value
@@ -80,7 +92,6 @@ if __name__ == "__main__":
     # https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.functions.get_json_object
     dfstreamStr = dfstream.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
     dfParse = dfstreamStr.select(
-        get_json_object(dfstreamStr.key, "$.subject").cast(StringType()).alias("subject_id"),
         get_json_object(dfstreamStr.key, "$.ch").cast(StringType()).alias("channel"),
         from_unixtime(get_json_object(dfstreamStr.value, "$.timestamp").cast(DoubleType())).cast(TimestampType()).alias("instr_time"),
         get_json_object(dfstreamStr.value, "$.v").cast(FloatType()).alias("voltage")
@@ -93,8 +104,8 @@ if __name__ == "__main__":
     # You can group by multiple columns:
     # https://stackoverflow.com/questions/41771327/spark-dataframe-groupby-multiple-times
     dfWindow = dfParse \
-        .withWatermark("instr_time", "5 seconds") \
-        .groupby(window(col("instr_time"), "16 seconds", "4 seconds"), "subject_id", "channel") \
+        .withWatermark("instr_time", "4 seconds") \
+        .groupby(window(col("instr_time"), "16 seconds", "4 seconds"), "channel") \
         .agg(collect_list(struct("instr_time", "voltage")).alias("time_series"))
 
     # Help function that will sort the grouped time series
