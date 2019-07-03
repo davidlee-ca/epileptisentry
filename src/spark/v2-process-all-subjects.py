@@ -10,6 +10,7 @@ import operator
 import numpy as np
 import pywt
 import entropy
+import os
 
 
 # from StackExchange: generate surrogate series
