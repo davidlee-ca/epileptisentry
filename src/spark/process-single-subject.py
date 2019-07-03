@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     subject_id = sys.argv[1]
     topic = "eeg-signal-" + subject_id
-
+    print("***************** MY TOPIC IS ***************" + topic)
 
     # Create a local SparkSession:
     # https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html#quick-example
@@ -124,14 +124,13 @@ if __name__ == "__main__":
     # Apply the UDF to the time series of voltage and obtain the seizure metric
     dfAnalysis = dfWindow.select(
         col("window.end").alias("instr_time"),
-        "subject_id",
         "channel",
         analyze_udf(dfWindow.time_series).cast(FloatType()).alias("seizure_metric"),
         count_udf(dfWindow.time_series).cast(IntegerType()).alias("num_datapoints")
-    )
+    ).withColumn('subject_id', lit(subject_id).cast(StringType()))
 
     # For appending to the analysis results, filter out null (not ready to commit).
-    dfAnalysisFiltered = dfAnalysis.where("seizure_metric is not null")
+    # dfAnalysisFiltered = dfAnalysis.where("seizure_metric is not null")
 
     # Pass on raw data in periodic batches
     dfRawWrite = dfParse.writeStream \
