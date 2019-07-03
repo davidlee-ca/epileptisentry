@@ -79,8 +79,9 @@ if __name__ == "__main__":
     # Parse this into a schema: channel from key, instrument timestamp and voltage from value
     # You can parson JSON using DataFrame functions
     # https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.functions.get_json_object
-    dfstreamStr = dfstream.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
+    dfstreamStr = dfstream.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)", "timestamp AS ingest_time")
     dfParse = dfstreamStr.select(
+        dfstreamStr.ingest_time,
         get_json_object(dfstreamStr.key, "$.subject").cast(StringType()).alias("subject_id"),
         get_json_object(dfstreamStr.key, "$.ch").cast(StringType()).alias("channel"),
         from_unixtime(get_json_object(dfstreamStr.value, "$.timestamp").cast(DoubleType())).cast(TimestampType()).alias("instr_time"),
@@ -94,9 +95,11 @@ if __name__ == "__main__":
     # You can group by multiple columns:
     # https://stackoverflow.com/questions/41771327/spark-dataframe-groupby-multiple-times
     dfWindow = dfParse \
-        .withWatermark("instr_time", "5 seconds") \
-        .groupby(window(col("instr_time"), "16 seconds", "4 seconds"), "subject_id", "channel") \
-        .agg(collect_list(struct("instr_time", "voltage")).alias("time_series"))
+        .withWatermark("ingest_time", "4 seconds") \
+        .groupby(window(col("ingest_time"), "16 seconds", "4 seconds"), "subject_id", "channel") \
+        .agg(max("instr_time").alias("instr_time"),
+             count("voltage").alias("num_datapoints"),
+             collect_list(struct("instr_time", "voltage")).alias("time_series"))
 
     # Help function that will sort the grouped time series
     # https://stackoverflow.com/questions/46580253/collect-list-by-preserving-order-based-on-another-variable
@@ -109,32 +112,28 @@ if __name__ == "__main__":
         return seizure_indicator
 
     analyze_udf = udf(sort_and_analyze_time_series)
-    count_udf = udf(lambda x: len(x))
 
     # Apply the UDF to the time series of voltage and obtain the seizure metric
     dfAnalysis = dfWindow.select(
-        col("window.end").alias("instr_time"),
+        "instr_time",
         "subject_id",
         "channel",
-        analyze_udf(dfWindow.time_series).cast(FloatType()).alias("seizure_metric"),
-        count_udf(dfWindow.time_series).cast(IntegerType()).alias("num_datapoints")
+        "num_datapoints",
+        analyze_udf(dfWindow.time_series).cast(FloatType()).alias("seizure_metric")
     )
-
-    # For appending to the analysis results, filter out null (not ready to commit).
-    dfAnalysisFiltered = dfAnalysis.where("seizure_metric is not null")
 
     # Pass on raw data in periodic batches
     dfRawWrite = dfParse.writeStream \
         .outputMode("append") \
         .foreachBatch(postgres_batch_raw) \
-        .trigger(processingTime="5 seconds") \
+        .trigger(processingTime="4 seconds") \
         .start()
 
     # for dfAnalysis, write as soon as they become available
     dfAnalysisWrite = dfAnalysis.writeStream \
         .outputMode("append") \
         .foreachBatch(postgres_batch_analyzed) \
-        .trigger(processingTime="5 seconds") \
+        .trigger(processingTime="4 seconds") \
         .start()
 
     dfRawWrite.awaitTermination()
