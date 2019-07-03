@@ -1,6 +1,4 @@
 from pyspark.sql import SparkSession
-
-"""
 from pyspark.sql import Row, SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
@@ -9,7 +7,6 @@ import numpy as np
 import pywt
 import entropy
 import os
-"""
 
 
 if __name__ == "__main__":
@@ -35,17 +32,27 @@ if __name__ == "__main__":
         .format("kafka") \
         .option("kafka.bootstrap.servers", "ip-10-0-1-24.ec2.internal:9092,ip-10-0-1-62.ec2.internal:9092") \
         .option("subscribe", "eeg-signal") \
-        .option("includeTimestamp", True) \
+        .option("includeTimestamp", "true") \
         .load()
 
     # Parse this into a schema: channel from key, instrument timestamp and voltage from value
     # You can parson JSON using DataFrame functions
     # https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.functions.get_json_object
 
+    dfstream2 = dfstream \
+        .groupby(window(col("timestamp"), "5 seconds", "3 seconds"), "partition") \
+        .agg(count("key"))
+
+
+
     dfconsole = dfstream \
         .writeStream \
-        .outputMode("complete") \
+        .outputMode("append") \
         .format("console") \
         .start()
 
+    dfconsole2 = dfstream2.writeStream.outputMode("complete").format("console").start()
+
     dfconsole.awaitTermination()
+    dfconsole2.awaitTermination()
+
