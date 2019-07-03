@@ -73,13 +73,14 @@ if __name__ == "__main__":
         .format("kafka") \
         .option("kafka.bootstrap.servers", "ip-10-0-1-24.ec2.internal:9092,ip-10-0-1-62.ec2.internal:9092") \
         .option("subscribe", "eeg-signal") \
-        .option("includeTimestamp", True) \
+        .option("includeTimestamp", "true") \
         .load()
 
     # Parse this into a schema: channel from key, instrument timestamp and voltage from value
     # You can parson JSON using DataFrame functions
     # https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.functions.get_json_object
     dfstreamStr = dfstream.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)", "timestamp AS ingest_time")
+
     dfParse = dfstreamStr.select(
         dfstreamStr.ingest_time,
         get_json_object(dfstreamStr.key, "$.subject").cast(StringType()).alias("subject_id"),
