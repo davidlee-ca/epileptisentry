@@ -7,6 +7,7 @@ import sys
 broker = "10.0.1.62:9092,10.0.1.24:9092,10.0.1.35:9092,10.0.1.17:9092,10.0.1.39:9092"
 
 if __name__ == '__main__':
+
     if len(sys.argv) != 3:
         sys.stderr.write('Usage: %s <subject_id> <replay file number>\n' % sys.argv[0])
         sys.exit(1)
@@ -14,6 +15,10 @@ if __name__ == '__main__':
     subject_id = sys.argv[1]
     replay_file_number = sys.argv[2]
     topic = "eeg-signal"
+
+    frequency = 256
+    delay = 1.0 / frequency * 0.9
+
 
     # Producer configuration
     # See https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
@@ -46,14 +51,16 @@ if __name__ == '__main__':
             key = '{"subject": "%s", "ch": "%s"}' % (subject_id, channels[i])
             value = '{"timestamp": %.6f, "v": %.6f}' % (start_time + float(readings[0]), float(readings[i + 1]))
             p.produce(topic, value=value, key=key)
-        sleep(0.0032)  # tunable -- 2ms worked well for 4, see if 1ms sleep will reduce the deviation
+        sleep(delay)  # tunable -- 2ms worked well for 4, see if 1ms sleep will reduce the deviation
         p.flush()
 
         count += 1
-        if count == 2560:
+
+        if count == 1280:
             new_heartbeat = time()
             duration = new_heartbeat - heartbeat
-            deviation = (10.0 - duration) * 1000
-            print(f"10-second check in for {subject_id}. Took {duration} sec to send 2560 x 23 messages. Deviation: {deviation:.2f} milliseconds.")
+            deviation = (5.0 - duration) * 1000
+            delay = delay + deviation / 5000 / 256.0 * 0.5  # 0.5 is the dampening factor
+            print(f"5-second check in for {subject_id}. Deviation: {deviation:.2f} ms, new delay: {delay * 1000:.2f} ms.")
             count = 0
             heartbeat = new_heartbeat
