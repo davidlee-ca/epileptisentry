@@ -4,7 +4,7 @@ import boto3
 import sys
 
 
-brokers = "10.0.1.62:9092,10.0.1.24:9092,10.0.1.35:9092,10.0.1.17:9092,10.0.1.39:9092"
+brokers = "10.0.1.36:9092,10.0.1.27:9092,10.0.1.11:9092,10.0.1.54:9092,10.0.1.61:9092"
 
 if __name__ == '__main__':
 
@@ -56,7 +56,7 @@ if __name__ == '__main__':
         sleep(delay)
         count += 1
 
-        if count % 5 == 0:  # batch 8 frames before sending to Kafka for efficiency
+        if count % 8 == 0:  # batch 8 frames before sending to Kafka for efficiency
             p.flush()
 
         if count == (refresh_delay_interval * frequency):  # adjust the sleeping interval
