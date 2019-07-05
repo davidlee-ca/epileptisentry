@@ -124,14 +124,17 @@ if __name__ == "__main__":
     )
 
     # Pass on raw data in periodic batches
-    dfRawWrite = dfParse.writeStream \
+    dfRawWrite = dfParse \
+        .drop("ingest_time") \
+        .writeStream \
         .outputMode("append") \
         .foreachBatch(postgres_batch_raw) \
         .trigger(processingTime="4 seconds") \
         .start()
 
     # for dfAnalysis, write as soon as they become available
-    dfAnalysisWrite = dfAnalysis.writeStream \
+    dfAnalysisWrite = dfAnalysis \
+        .writeStream \
         .outputMode("append") \
         .foreachBatch(postgres_batch_analyzed) \
         .trigger(processingTime="4 seconds") \
