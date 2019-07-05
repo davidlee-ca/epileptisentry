@@ -30,20 +30,12 @@ def get_delta_apen(ts): # time-series is an array
     return delta_ApEns.item()
 
 
-postgres_url="jdbc:postgresql://ip-10-0-1-31.ec2.internal:5432/speegs"
+postgres_url="jdbc:postgresql://ip-10-0-1-31.ec2.internal:5432/epileptisentry"
 postgres_properties = {
     "user": os.environ['POSTGRES_USER'],
     "password": os.environ['POSTGRES_PASSWORD']
 }
 
-
-def postgres_batch_raw(df, epoch_id):
-    # foreachBatch write sink; helper for writing streaming dataFrames
-    df.write.jdbc(
-        url=postgres_url,
-        table="eeg_data",
-        mode="append",
-        properties=postgres_properties)
 
 def postgres_batch_analyzed(df, epoch_id):
     # foreachBatch write sink; helper for writing streaming dataFrames
@@ -55,7 +47,7 @@ def postgres_batch_analyzed(df, epoch_id):
 
 
 if __name__ == "__main__":
-    # Create a local SparkSession:
+    # Create a local SparkSession
     # https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html#quick-example
     spark = SparkSession \
         .builder \
@@ -76,11 +68,12 @@ if __name__ == "__main__":
         .option("includeTimestamp", "true") \
         .load()
 
-    # Parse this into a schema: channel from key, instrument timestamp and voltage from value
-    # You can parson JSON using DataFrame functions
+    # Parse this into a schema using Spark's JSON decoder:
+    #   from key -- subject ID and EEG channel
+    #   from value -- instrument timestamp and voltage reading
+    #   plus the ingestion timestamp
     # https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.functions.get_json_object
     dfstreamStr = dfstream.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)", "timestamp AS ingest_time")
-
     dfParse = dfstreamStr.select(
         dfstreamStr.ingest_time,
         get_json_object(dfstreamStr.key, "$.subject").cast(StringType()).alias("subject_id"),
@@ -89,11 +82,9 @@ if __name__ == "__main__":
         get_json_object(dfstreamStr.value, "$.v").cast(FloatType()).alias("voltage")
     )
 
-    # Window this into 16-second windows hopping at 4 seconds -- INSTRUMENT TIME, not real time!
-    # It will also ensure that I will have 4096 data points at each bin
-    #
-    # Group by subject and and then by channel
-    # You can group by multiple columns:
+    # Create 16-second windows hopping at 4 seconds at ingestion time rather than instrument time to avoid situations
+    # where EEG signals from one subject miss the watermark time altogether and then never catch up
+    # Within each time window, group by subject and and then by channel
     # https://stackoverflow.com/questions/41771327/spark-dataframe-groupby-multiple-times
     dfWindow = dfParse \
         .withWatermark("ingest_time", "4 seconds") \
@@ -102,7 +93,9 @@ if __name__ == "__main__":
              count("voltage").alias("num_datapoints"),
              collect_list(struct("instr_time", "voltage")).alias("time_series"))
 
-    # Help function that will sort the grouped time series
+    # Help function that will sort the grouped time series and compute the seizure indicator metric
+    # Sorting is required: collect_list is not deterministic due to shuffling
+    # https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.functions.collect_list
     # https://stackoverflow.com/questions/46580253/collect-list-by-preserving-order-based-on-another-variable
     def sort_and_analyze_time_series(l):
         if len(l) < 3687: # ideally this needs to be 4096; 10% tolerance
@@ -123,16 +116,7 @@ if __name__ == "__main__":
         analyze_udf(dfWindow.time_series).cast(FloatType()).alias("seizure_metric")
     )
 
-    # Pass on raw data in periodic batches
-    dfRawWrite = dfParse \
-        .drop("ingest_time") \
-        .writeStream \
-        .outputMode("append") \
-        .foreachBatch(postgres_batch_raw) \
-        .trigger(processingTime="4 seconds") \
-        .start()
-
-    # for dfAnalysis, write as soon as they become available
+    # write dfAnalysis into , write as soon as they become available
     dfAnalysisWrite = dfAnalysis \
         .writeStream \
         .outputMode("append") \
@@ -140,5 +124,4 @@ if __name__ == "__main__":
         .trigger(processingTime="4 seconds") \
         .start()
 
-    dfRawWrite.awaitTermination()
     dfAnalysisWrite.awaitTermination()
