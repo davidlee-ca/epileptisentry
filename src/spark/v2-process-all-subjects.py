@@ -15,9 +15,9 @@ import os
 
 # from StackExchange: generate surrogate series
 def generate_surrogate_series(ts):
-    ts_fourier  = np.fft.rfft(ts)
-    random_phases = np.exp(np.random.uniform(0,np.pi,len(ts)//2+1)*1.0j)
-    ts_fourier_new = ts_fourier*random_phases
+    ts_fourier = np.fft.rfft(ts)
+    random_phases = np.exp(np.random.uniform(0, np.pi, len(ts) // 2 + 1) * 1.0j)
+    ts_fourier_new = ts_fourier * random_phases
     new_ts = np.fft.irfft(ts_fourier_new)
     return new_ts.tolist()
 
@@ -62,9 +62,9 @@ def analyze_sample(rdd):
 
     if not (rdd.isEmpty()):
 
-        dfInput = spark.createDataFrame(rdd, schema)
+        df_input = spark.createDataFrame(rdd, schema)
 
-        dfGrouped = dfInput \
+        df_grouped = df_input \
             .groupby("subject_id", "channel") \
             .agg(max("instr_time").alias("instr_time"),
                  count("voltage").alias("num_datapoints"),
@@ -83,66 +83,41 @@ def analyze_sample(rdd):
         analyze_udf = udf(sort_and_analyze_time_series)
 
         # Apply the UDF to the time series of voltage and obtain the seizure metric
-        dfAnalysis = dfGrouped.select(
+        df_analyzed = df_grouped.select(
             "instr_time",
             "subject_id",
             "channel",
-            analyze_udf(dfGrouped.time_series).cast(FloatType()).alias("seizure_metric"),
+            analyze_udf(df_grouped.time_series).cast(FloatType()).alias("seizure_metric"),
             "num_datapoints"
         )
 
-        dfInput.write.jdbc(url=tsdb_url, table="eeg_data", mode="append", properties=tsdb_properties)
-        dfAnalysis.write.jdbc(url=tsdb_url, table="eeg_analysis", mode="append", properties=tsdb_properties)
+        df_input.write.jdbc(url=tsdb_url, table="eeg_data", mode="append", properties=tsdb_properties)
+        df_analyzed.write.jdbc(url=tsdb_url, table="eeg_analysis", mode="append", properties=tsdb_properties)
 
 
 
 if __name__ == "__main__":
 
     topic = "eeg-signal"
-    zk_quorum = "ip-10-0-1-24.ec2.internal:2181,ip-10-0-1-62.ec2.internal:2181,ip-10-0-1-17.ec2.internal:2181"
-
+    zk_quorum = "10.0.1.62:2181,10.0.1.24:2181,10.0.1.35:2181,10.0.1.17:2181,10.0.1.39:2181"
     sc = SparkContext(appName="SparkStreamConsumerFromKafka").getOrCreate()
     sc.setLogLevel("WARN")
     ssc = StreamingContext(sc, 4)
     spark = SparkSession(sc)
 
-    rawStream = KafkaUtils.createStream(ssc,
-                                        zk_quorum,
-                                        "sparkTestApplication",
-                                        {"eeg-signal": 1})
+    raw_stream = KafkaUtils.createStream(ssc, zk_quorum, "sparkTestApplication", {"eeg-signal": 1})
 
     # Unpack the JSON from the messages
     # DStream structure: subject_id, channel, instrument_timestamp, voltage
-    parsedStream = rawStream \
+    parsed_stream = raw_stream \
         .map(lambda u: (loads(u[0]), loads(u[1]))) \
         .map(lambda v: (v[0]["subject"], v[0]["ch"], dt.fromtimestamp(v[1]["timestamp"]), v[1]["v"]))
 
     # Create sliding window of 16 seconds and run it every 4 seconds
-    windowedStream = parsedStream.window(16, 4)
+    windowed_stream = parsed_stream.window(16, 4)
 
     # Hand over the windowed RDD to the analysis function
-    windowedStream.foreachRDD(analyze_sample)
+    windowed_stream.foreachRDD(analyze_sample)
 
     ssc.start()
     ssc.awaitTermination()
-
-"""
-
-
-def postgres_batch_raw(df, epoch_id):
-    # foreachBatch write sink; helper for writing streaming dataFrames
-    df.write.jdbc(
-        url=postgres_url,
-        table="eeg_data",
-        mode="append",
-        properties=postgres_properties)
-
-
-def postgres_batch_analyzed(df, epoch_id):
-    # foreachBatch write sink; helper for writing streaming dataFrames
-    df.write.jdbc(
-        url=postgres_url,
-        table="eeg_analysis",
-        mode="append",
-        properties=postgres_properties)
-"""

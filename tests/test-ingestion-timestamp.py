@@ -2,11 +2,6 @@ from pyspark.sql import SparkSession
 from pyspark.sql import Row, SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
-import operator
-import numpy as np
-import pywt
-import entropy
-import os
 
 
 if __name__ == "__main__":
@@ -42,8 +37,6 @@ if __name__ == "__main__":
     dfstream2 = dfstream \
         .groupby(window(col("timestamp"), "5 seconds", "3 seconds"), "partition") \
         .agg(count("key"))
-
-
 
     dfconsole = dfstream \
         .writeStream \

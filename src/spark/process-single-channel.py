@@ -26,6 +26,7 @@ properties = {
     "password": os.environ['POSTGRES_PASSWORD']
 }
 
+
 # from StackExchange -- generate surrogate series!
 def generate_surrogate_series(ts):  # time-series is an array
     ts_fourier  = np.fft.rfft(ts)
@@ -75,11 +76,6 @@ def analyze_sample(rdd):
         df_input.write.jdbc(url=postgres_url, table="eeg_data", mode="append", properties=properties)
         df_analysis.write.jdbc(url=postgres_url, table="eeg_analysis", mode="append", properties=properties)
 
-        # Print out the results
-#        print(f"Readings: {readings}")
-#        print(f"  sorted: {readings_sorted}")
-#        print(f"Time Series: {timeseries}")
-
 
 if __name__ == "__main__":
 
@@ -88,7 +84,11 @@ if __name__ == "__main__":
     ssc = StreamingContext(sc, 2)
     spark = SparkSession(sc)
 
-    raw_topic = KafkaUtils.createStream(ssc, "10.0.1.24:2181,10.0.1.62:2181,10.0.1.35:2181,10.0.1.17:2181,10.0.1.39:2181", "sparkApplication", {"eeg-signal": 1})
+    raw_topic = KafkaUtils.createStream(ssc,
+                                        "10.0.1.24:2181,10.0.1.62:2181,10.0.1.35:2181,10.0.1.17:2181,10.0.1.39:2181",
+                                        "sparkApplication",
+                                        {"eeg-signal": 1})
+
     parsed_input = raw_topic.map(lambda v: (loads(v[0]), loads(v[1]))) # expect JSON serialization
 
     # structure: subject_id, channel, instrument_timestamp, voltage

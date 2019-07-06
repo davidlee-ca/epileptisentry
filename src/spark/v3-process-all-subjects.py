@@ -8,42 +8,40 @@ import entropy
 import os
 
 
-# from StackExchange -- generate surrogate series!
+# from StackExchange -- generate surrogate series
+# https://stats.stackexchange.com/questions/204032/surrogate-time-series-using-fourier-transform
 def generate_surrogate_series(ts):  # time-series is an array
     ts_fourier  = np.fft.rfft(ts)
-    random_phases = np.exp(np.random.uniform(0,np.pi,len(ts)//2+1)*1.0j)
-    ts_fourier_new = ts_fourier*random_phases
+    random_phases = np.exp(np.random.uniform(0, np.pi, len(ts) // 2 + 1) * 1.0j)
+    ts_fourier_new = ts_fourier * random_phases
     new_ts = np.fft.irfft(ts_fourier_new)
     return new_ts.tolist()
 
 
-def get_delta_apen(ts): # time-series is an array
-    # Perform discrete wavelet transform to get D2 coefficient time series,
-    # and create corresponding surrogate time series
-    cD2 = pywt.downcoef('d', ts, 'db4', level=2)
-    cD2_surrogate = generate_surrogate_series(cD2)
-    app_entropy_sample = entropy.app_entropy(cD2, order=2, metric='chebyshev')
-    app_entropy_surrogate = entropy.app_entropy(cD2_surrogate, order=2, metric='chebyshev')
+# Perform discrete wavelet transform to get D2 coefficient time series, and create a matching surrogate time series.
+# The difference in the approximate entropy (delta_apen) of the time series pair can identify seizure activity
+# Adapted from Ocak, Exp System Appl 2009
+def get_delta_ap_en(ts):
+    d2_coefficients = pywt.downcoef('d', ts, 'db4', level=2)
+    surrogate_coefficients = generate_surrogate_series(d2_coefficients)
+    app_entropy_sample = entropy.app_entropy(d2_coefficients, order=2, metric='chebyshev')
+    app_entropy_surrogate = entropy.app_entropy(surrogate_coefficients, order=2, metric='chebyshev')
 
     # Return the delta
-    delta_ApEns = app_entropy_surrogate - app_entropy_sample
-    return delta_ApEns.item()
+    delta_ap_en = app_entropy_surrogate - app_entropy_sample
+    return delta_ap_en.item()
 
 
-postgres_url="jdbc:postgresql://ip-10-0-1-31.ec2.internal:5432/epileptisentry"
-postgres_properties = {
-    "user": os.environ['POSTGRES_USER'],
-    "password": os.environ['POSTGRES_PASSWORD']
-}
-
-
+# foreachBatch write sink; helper function for writing streaming dataFrames
 def postgres_batch_analyzed(df, epoch_id):
-    # foreachBatch write sink; helper for writing streaming dataFrames
     df.write.jdbc(
-        url=postgres_url,
+        url="jdbc:postgresql://ip-10-0-1-31.ec2.internal:5432/epileptisentry",
         table="eeg_analysis",
         mode="append",
-        properties=postgres_properties)
+        properties={
+            "user": os.environ['POSTGRES_USER'],
+            "password": os.environ['POSTGRES_PASSWORD']
+        })
 
 
 if __name__ == "__main__":
@@ -51,19 +49,20 @@ if __name__ == "__main__":
     # https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html#quick-example
     spark = SparkSession \
         .builder \
-        .appName("EEGProcessAllSubjectsV3") \
+        .appName("epileptiSentryProcessV3") \
         .getOrCreate()
 
     # Suppress the console output's INFO and WARN
     # https://stackoverflow.com/questions/27781187/how-to-stop-info-messages-displaying-on-spark-console
     spark.sparkContext.setLogLevel("WARN")
 
-    # Subscribe to a Kafka topic:
+    # Subscribe to a Kafka topic
     # https://spark.apache.org/docs/latest/structured-streaming-kafka-integration.html#creating-a-kafka-source-for-streaming-queries
     dfstream = spark \
         .readStream \
         .format("kafka") \
-        .option("kafka.bootstrap.servers", "ip-10-0-1-24.ec2.internal:9092,ip-10-0-1-62.ec2.internal:9092") \
+        .option("kafka.bootstrap.servers",
+                "10.0.1.62:9092,10.0.1.24:9092,10.0.1.35:9092,10.0.1.17:9092,10.0.1.39:9092") \
         .option("subscribe", "eeg-signal") \
         .option("includeTimestamp", "true") \
         .load()
@@ -73,20 +72,20 @@ if __name__ == "__main__":
     #   from value -- instrument timestamp and voltage reading
     #   plus the ingestion timestamp
     # https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.functions.get_json_object
-    dfstreamStr = dfstream.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)", "timestamp AS ingest_time")
-    dfParse = dfstreamStr.select(
-        dfstreamStr.ingest_time,
-        get_json_object(dfstreamStr.key, "$.subject").cast(StringType()).alias("subject_id"),
-        get_json_object(dfstreamStr.key, "$.ch").cast(StringType()).alias("channel"),
-        from_unixtime(get_json_object(dfstreamStr.value, "$.timestamp").cast(DoubleType())).cast(TimestampType()).alias("instr_time"),
-        get_json_object(dfstreamStr.value, "$.v").cast(FloatType()).alias("voltage")
+    dfstream_str = dfstream.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)", "timestamp AS ingest_time")
+    df_parsed = dfstream_str.select(
+        dfstream_str.ingest_time,
+        get_json_object(dfstream_str.key, "$.subject").cast(StringType()).alias("subject_id"),
+        get_json_object(dfstream_str.key, "$.ch").cast(StringType()).alias("channel"),
+        from_unixtime(get_json_object(dfstream_str.value, "$.timestamp").cast(DoubleType())).cast(TimestampType()).alias("instr_time"),
+        get_json_object(dfstream_str.value, "$.v").cast(FloatType()).alias("voltage")
     )
 
     # Create 16-second windows hopping at 4 seconds at ingestion time rather than instrument time to avoid situations
     # where EEG signals from one subject miss the watermark time altogether and then never catch up
     # Within each time window, group by subject and and then by channel
     # https://stackoverflow.com/questions/41771327/spark-dataframe-groupby-multiple-times
-    dfWindow = dfParse \
+    df_windowed = df_parsed \
         .withWatermark("ingest_time", "4 seconds") \
         .groupby(window(col("ingest_time"), "16 seconds", "4 seconds"), "subject_id", "channel") \
         .agg(max("instr_time").alias("instr_time"),
@@ -102,26 +101,26 @@ if __name__ == "__main__":
             return None
         res = sorted(l, key=operator.itemgetter(0))
         time_series = [item[1] for item in res]
-        seizure_indicator = get_delta_apen(time_series)
+        seizure_indicator = get_delta_ap_en(time_series)
         return seizure_indicator
 
     analyze_udf = udf(sort_and_analyze_time_series)
 
     # Apply the UDF to the time series of voltage and obtain the seizure metric
-    dfAnalysis = dfWindow.select(
+    df_analyzed = df_windowed.select(
         "instr_time",
         "subject_id",
         "channel",
         "num_datapoints",
-        analyze_udf(dfWindow.time_series).cast(FloatType()).alias("seizure_metric")
+        analyze_udf(df_windowed.time_series).cast(FloatType()).alias("seizure_metric")
     )
 
     # write dfAnalysis into , write as soon as they become available
-    dfAnalysisWrite = dfAnalysis \
+    df_write = df_analyzed \
         .writeStream \
         .outputMode("append") \
         .foreachBatch(postgres_batch_analyzed) \
         .trigger(processingTime="4 seconds") \
         .start()
 
-    dfAnalysisWrite.awaitTermination()
+    df_write.awaitTermination()

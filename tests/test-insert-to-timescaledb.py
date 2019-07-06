@@ -26,22 +26,3 @@ if __name__ == "__main__":
     df_raw.show()
 
     df_raw.write.jdbc(url=postgres_url, table="eeg_data", mode="append", properties=properties)
-
-"""
-
-    df_raw.write.jdbc \
-        .format("jdbc") \
-        .option("url", "jdbc:ec2-3-215-187-200.compute-1.amazonaws.com:5432") \
-        .option("dbtable", "speegs.eeg_data") \
-        .option("user", "postgres") \
-        .option("password", "insightData") \
-        .save()
-"""
-"""
-CREATE TABLE IF NOT EXISTS "eeg_data"(
-    instrument_time TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    subject_id TEXT,
-    channel TEXT,
-    reading REAL
-);
-"""

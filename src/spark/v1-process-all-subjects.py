@@ -11,8 +11,8 @@ import os
 # from StackExchange -- generate surrogate series!
 def generate_surrogate_series(ts):  # time-series is an array
     ts_fourier  = np.fft.rfft(ts)
-    random_phases = np.exp(np.random.uniform(0,np.pi,len(ts)//2+1)*1.0j)
-    ts_fourier_new = ts_fourier*random_phases
+    random_phases = np.exp(np.random.uniform(0, np.pi, len(ts) // 2 + 1) * 1.0j)
+    ts_fourier_new = ts_fourier * random_phases
     new_ts = np.fft.irfft(ts_fourier_new)
     return new_ts.tolist()
 
@@ -44,6 +44,7 @@ def postgres_batch_raw(df, epoch_id):
         table="eeg_data",
         mode="append",
         properties=postgres_properties)
+
 
 def postgres_batch_analyzed(df, epoch_id):
     # foreachBatch write sink; helper for writing streaming dataFrames

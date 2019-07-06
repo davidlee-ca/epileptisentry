@@ -31,12 +31,12 @@ def get_delta_apen(ts): # time-series is an array
     return delta_ApEns.item()
 
 
-postgres_url="jdbc:postgresql://ip-10-0-1-31.ec2.internal:5432/speegs"
+postgres_url = "jdbc:postgresql://ip-10-0-1-31.ec2.internal:5432/speegs"
 postgres_properties = {
     "user": os.environ['POSTGRES_USER'],
     "password": os.environ['POSTGRES_PASSWORD']
 }
-kafka_brokers="ip-10-0-1-24.ec2.internal:9092,ip-10-0-1-62.ec2.internal:9092,ip-10-0-1-17.ec2.internal:9092"
+kafka_brokers = "ip-10-0-1-24.ec2.internal:9092,ip-10-0-1-62.ec2.internal:9092,ip-10-0-1-17.ec2.internal:9092"
 
 
 def postgres_batch_raw(df, epoch_id):
@@ -65,7 +65,6 @@ if __name__ == "__main__":
 
     subject_id = sys.argv[1]
     topic = "eeg-signal-" + subject_id
-    print("***************** MY TOPIC IS ***************" + topic)
 
     # Create a local SparkSession:
     # https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html#quick-example
