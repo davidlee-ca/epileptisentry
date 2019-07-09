@@ -15,12 +15,10 @@ An estimated 3.4 million Americans have epilepsy [1]. Despite its prevalence, ac
 1. identify potential seizure activities from EEG signals real-time; and 
 2. notify the right people to closely monitor the seizure events as they happen
 
-By centralizing the signal processing, **_epileptiSentry_** also helps reduce the costs of closely monitoring patients 1-on-1 for extended periods of time and 
 
-# Solution Design
-[FIXME: in progress]
+# Engineering Design
 
-## Processing Pipeline
+### Processing Pipeline
 ![Pipeline diagram](./docs/pipeline.png)
 
 A Python script unpacks EEG data in S3 (see the Data Source section), reproduces them as stand-ins for EEG instruments, and sends them to a cluster of EC2 instances running Kafka. A cluster with a matching number of EC2 instances running Spark consumes the messages and calculates the abnormal indicator metric for each subject and channel, which is stored in TimescaleDB. Grafana is used to visualize the metric and issue alerts to observers if a predefined threshold is exceeded.
@@ -49,7 +47,7 @@ Role | Signal Reproduction | Kafka | Spark | TimescaleDB | Grafana
 ### Signal Reproduction
 Launch two c5.xlarge instances running Ubuntu 18.04 LTS with roles for S3 access. Install Python 3.7.3 and required packages:
 ```bash
-python3 -m pip -r $PROJECT_HOME/config/eeg-player-requirements.txt
+python3.7 -m pip -r $PROJECT_HOME/config/eeg-player-requirements.txt
 ```
 To start signal reproduction, run a bash script from each instance, which will simultaneously kick off 12 processes running *produce-signals.py*.
 ```bash
@@ -68,8 +66,9 @@ pkill -f produce-signals
 ### Spark
 [Download](https://spark.apache.org/downloads.html) and install Spark 2.4.3 pre-built with Apache Hadoop 2.7+ on instances running Ubuntu 18.04 LTS. Install Python 3.7.3 and Python packages:
 ```bash
-$ python3 -m pip -r $PROJECT_HOME/config/sparkcluster-requirements.txt
+$ python3.7 -m pip -r $PROJECT_HOME/config/sparkcluster-requirements.txt
 ```
+
 
 ### TimescaleDB
 Launch an c5.2xlarge instance with Amazon Machine Image (AMI) [provided by Timescale](https://docs.timescale.com/v1.3/getting-started/installation/ami/installation-ubuntu-ami). Then, import the following schema:
@@ -77,11 +76,14 @@ Launch an c5.2xlarge instance with Amazon Machine Image (AMI) [provided by Times
 psql -U postgres -d epileptisentry -f $PROJECT_HOME/config/tsdb-schema.sql
 ```
 
+
 ### Grafana
 Follow the [instructions from the Grafana Labs website](https://grafana.com/docs/installation/debian/) to deploy Grafana. Custom configuration key-values and apache2's setup (http-to-https redirection) are available in the `config/grafana' directory.
 
+
 ## Credits
 epileptiSentry was developed by David Lee ([LinkedIn Profile](https://www.linkedin.com/in/wdlee/)). This project was a deliverable from my fellowship in Insight Data Engineering Fellowship program in June 2019 in New York City, NY, United States.
+
 
 # References
 [1] U.S. Center for Disease Control and Prevention. [Epilepsy Data and Statistics](https://www.cdc.gov/epilepsy/data/index.html).  
@@ -89,4 +91,3 @@ epileptiSentry was developed by David Lee ([LinkedIn Profile](https://www.linked
 [3] Bigdely-Shamlo et al. [The PREP pipeline: standardized preprocessing for large-scale EEG analysis.](https://www.frontiersin.org/articles/10.3389/fninf.2015.00016/full) Front Neuroinform (2015) **9**:16.  
 [4] Moeller et al. [Electroencephalography (EEG) in the diagnosis of seizures and epilepsy.](https://www.uptodate.com/contents/electroencephalography-eeg-in-the-diagnosis-of-seizures-and-epilepsy) UpToDate (2018).  
 [5] Ocak, H. [Automatic detection of epileptic seizures in EEG using discrete wavelet transform and approximate entropy.](http://www.sciencedirect.com/science/article/pii/S0957417407006203) Exp System Appl (2009) **2**, Part 1:2027-2036. 
-[6] Goldberger et al. PhysioBank, PhysioToolkit, and PhysioNet: Components of a New Research Resource for Complex Physiologic Signals. Circulation 101(23):e215-e220 [Circulation Electronic Pages; http://circ.ahajournals.org/cgi/content/full/101/23/e215]; 2000 (June 13).
