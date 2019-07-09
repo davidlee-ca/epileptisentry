@@ -5,7 +5,6 @@ European Data Format (.edf, https://www.edfplus.info/), into csv.
 Version History:
 v0.1 (June 17, 2019): first version, meant to convert a single file (see the sourceFile variable) and upload to a S3
     bucket
-v0.2 (June 25, 2019):
 Author:
 David Lee, Insight Data Engineering Fellow, New York City 2019
 """

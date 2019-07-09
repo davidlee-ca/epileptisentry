@@ -4,7 +4,7 @@ import boto3
 import sys
 
 
-broker = "10.0.1.62:9092,10.0.1.24:9092,10.0.1.35:9092,10.0.1.17:9092,10.0.1.39:9092"
+broker = "10.0.1.62:9092,10.0.1.24:9092,10.0.1.17:9092"
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
@@ -13,7 +13,7 @@ if __name__ == '__main__':
 
     subject_id = sys.argv[1]
     replay_file_number = sys.argv[2]
-    topic = "eeg-signal"
+    topic = "eeg-signal-" + subject_id
 
     # Producer configuration
     # See https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
@@ -43,10 +43,10 @@ if __name__ == '__main__':
         readings = str(line.decode().strip()).split(',')
 
         for i in range(23):
-            key = '{"subject": "%s", "ch": "%s"}' % (subject_id, channels[i])
+            key = '{"ch": "%s"}' % (channels[i])
             value = '{"timestamp": %.6f, "v": %.6f}' % (start_time + float(readings[0]), float(readings[i + 1]))
             p.produce(topic, value=value, key=key)
-        sleep(0.003)  # tunable -- 2ms worked well for 4, see if 1ms sleep will reduce the deviation
+        sleep(0.0033)  # tunable -- 2ms worked well for 4, see if 1ms sleep will reduce the deviation
         p.flush()
 
         count += 1
