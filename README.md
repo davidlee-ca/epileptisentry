@@ -1,6 +1,6 @@
-Real-time electroencephalography (EEG) signal analysis for monitoring seizure activity at scale
-
 ![epileptiSentry Logo](./docs/epileptiSentry-hero-image.jpg)
+
+Real-time electroencephalography (EEG) signal analysis for monitoring seizure activity at scale
 
 ## Table of Contents
 
