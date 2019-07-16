@@ -10,5 +10,3 @@ python produce-signals.py chb07 &
 python produce-signals.py chb08 &
 python produce-signals.py chb09 &
 python produce-signals.py chb10 &
-python produce-signals.py chb11 &
-python produce-signals.py chb12 &
