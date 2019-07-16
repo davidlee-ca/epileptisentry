@@ -11,9 +11,10 @@ sudo psql -U postgres -d [database-name] -a -f tsdb-schema.sql
 DROP TABLE IF EXISTS "eeg_analysis";
 CREATE TABLE "eeg_analysis"(
     instr_time TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+	ingest_time TIMESTAMP WITHOUT TIME ZONE,
 	subject_id TEXT NOT NULL,
 	channel TEXT NOT NULL,
-	seizure_metric REAL,
+	abnormality_indicator REAL,
 	num_datapoints INTEGER,
 );
 
