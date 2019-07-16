@@ -45,7 +45,7 @@ def get_delta_ap_en(ts):
 # foreachBatch write sink; helper function for writing streaming dataFrames
 def postgres_batch_analyzed(df, epoch_id):
     df.write.jdbc(
-        url="jdbc:postgresql://ip-10-0-1-31.ec2.internal:5432/epileptisentry",
+        url="jdbc:postgresql://10.0.1.38:5432/epileptisentry",
         table="eeg_analysis",
         mode="append",
         properties={
@@ -94,6 +94,7 @@ if __name__ == "__main__":
         .withWatermark("ingest_time", "4 seconds") \
         .groupby(window(col("ingest_time"), "16 seconds", "4 seconds"), "subject_id", "channel") \
         .agg(max("instr_time").alias("instr_time"),
+             max("ingest_time").alias("ingest_time"),
              count("voltage").alias("num_datapoints"),
              collect_list(struct("instr_time", "voltage")).alias("time_series"))
 
@@ -114,7 +115,7 @@ if __name__ == "__main__":
 
     # Apply the UDF to the time series of voltage and obtain the seizure metric
     df_analyzed = df_windowed \
-        .withColumn("abnormality_metric", analyze_udf(col(time_series)).cast(FloatType()))
+        .withColumn("time_series", analyze_udf(col(time_series)).cast(FloatType()).alias("abnormality_indicator"))
 
     # write the abnormality metrics to TimescaleDB at a 4-second batch
     df_write = df_analyzed \
