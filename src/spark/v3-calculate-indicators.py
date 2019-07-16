@@ -68,7 +68,7 @@ if __name__ == "__main__":
         .readStream \
         .format("kafka") \
         .option("kafka.bootstrap.servers",
-                "10.0.1.62:9092,10.0.1.24:9092,10.0.1.35:9092,10.0.1.17:9092,10.0.1.39:9092") \
+                "10.0.1.36:9092,10.0.1.11:9092,10.0.1.27:9092,10.0.1.61:9092,10.0.1.54:9092") \
         .option("subscribe", "eeg-signal") \
         .option("includeTimestamp", "true") \
         .load()
