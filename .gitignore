@@ -109,3 +109,4 @@ venv.bak/
 # My Scratchpad
 scratchpad/
 .vscode/
+nohup.out
