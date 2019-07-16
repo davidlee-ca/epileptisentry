@@ -1,3 +1,14 @@
+"""
+This PySpark logic consumes electroencephalography (EEG) data from Kafka, and compute 
+an "abnormality activity indicator" for every subject and channel on a sliding time window.
+
+The abnormality activity indicator logic has been adapted from Ocak, Exp System Appl 2009.
+
+Author:
+David Lee, Insight Data Engineering Fellow, New York City 2019
+"""
+
+
 from pyspark.sql import Row, SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
@@ -10,7 +21,7 @@ import os
 
 # from StackExchange -- generate surrogate series
 # https://stats.stackexchange.com/questions/204032/surrogate-time-series-using-fourier-transform
-def generate_surrogate_series(ts):  # time-series is an array
+def generate_surrogate_series(ts):  # ts is a time series signal, represented by an ordered list
     ts_fourier  = np.fft.rfft(ts)
     random_phases = np.exp(np.random.uniform(0, np.pi, len(ts) // 2 + 1) * 1.0j)
     ts_fourier_new = ts_fourier * random_phases
@@ -19,8 +30,7 @@ def generate_surrogate_series(ts):  # time-series is an array
 
 
 # Perform discrete wavelet transform to get D2 coefficient time series, and create a matching surrogate time series.
-# The difference in the approximate entropy (delta_apen) of the time series pair can identify seizure activity
-# Adapted from Ocak, Exp System Appl 2009
+# The difference in the approximate entropy (delta_apen) of the time series pair can identify abnormal brain activity.
 def get_delta_ap_en(ts):
     d2_coefficients = pywt.downcoef('d', ts, 'db4', level=2)
     surrogate_coefficients = generate_surrogate_series(d2_coefficients)
@@ -51,13 +61,9 @@ if __name__ == "__main__":
         .builder \
         .appName("epileptiSentryProcessV3") \
         .getOrCreate()
-
-    # Suppress the console output's INFO and WARN
-    # https://stackoverflow.com/questions/27781187/how-to-stop-info-messages-displaying-on-spark-console
     spark.sparkContext.setLogLevel("WARN")
 
     # Subscribe to a Kafka topic
-    # https://spark.apache.org/docs/latest/structured-streaming-kafka-integration.html#creating-a-kafka-source-for-streaming-queries
     dfstream = spark \
         .readStream \
         .format("kafka") \
@@ -68,10 +74,9 @@ if __name__ == "__main__":
         .load()
 
     # Parse this into a schema using Spark's JSON decoder:
-    #   from key -- subject ID and EEG channel
-    #   from value -- instrument timestamp and voltage reading
-    #   plus the ingestion timestamp
-    # https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.functions.get_json_object
+    #   - from key -- subject ID and EEG channel
+    #   - from value -- instrument timestamp and voltage reading
+    #   - the ingestion timestamp
     dfstream_str = dfstream.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)", "timestamp AS ingest_time")
     df_parsed = dfstream_str.select(
         dfstream_str.ingest_time,
@@ -93,29 +98,25 @@ if __name__ == "__main__":
              collect_list(struct("instr_time", "voltage")).alias("time_series"))
 
     # Help function that will sort the grouped time series and compute the seizure indicator metric
-    # Sorting is required: collect_list is not deterministic due to shuffling
+    # Sorting is required: due to shuffling, collect_list is not deterministic
     # https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.functions.collect_list
     # https://stackoverflow.com/questions/46580253/collect-list-by-preserving-order-based-on-another-variable
+
     def sort_and_analyze_time_series(l):
         if len(l) < 3687: # ideally this needs to be 4096; 10% tolerance
             return None
         res = sorted(l, key=operator.itemgetter(0))
         time_series = [item[1] for item in res]
-        seizure_indicator = get_delta_ap_en(time_series)
-        return seizure_indicator
+        abnormality_indicator = get_delta_ap_en(time_series)
+        return abnormality_indicator
 
     analyze_udf = udf(sort_and_analyze_time_series)
 
     # Apply the UDF to the time series of voltage and obtain the seizure metric
-    df_analyzed = df_windowed.select(
-        "instr_time",
-        "subject_id",
-        "channel",
-        "num_datapoints",
-        analyze_udf(df_windowed.time_series).cast(FloatType()).alias("seizure_metric")
-    )
+    df_analyzed = df_windowed \
+        .withColumn("abnormality_metric", analyze_udf(col(time_series)).cast(FloatType()))
 
-    # write dfAnalysis into , write as soon as they become available
+    # write the abnormality metrics to TimescaleDB at a 4-second batch
     df_write = df_analyzed \
         .writeStream \
         .outputMode("append") \
