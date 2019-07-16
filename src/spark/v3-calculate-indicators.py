@@ -94,7 +94,6 @@ if __name__ == "__main__":
         .withWatermark("ingest_time", "4 seconds") \
         .groupby(window(col("ingest_time"), "16 seconds", "4 seconds"), "subject_id", "channel") \
         .agg(max("instr_time").alias("instr_time"),
-             max("ingest_time").alias("ingest_time"),
              count("voltage").alias("num_datapoints"),
              collect_list(struct("instr_time", "voltage")).alias("time_series"))
 
@@ -102,7 +101,6 @@ if __name__ == "__main__":
     # Sorting is required: due to shuffling, collect_list is not deterministic
     # https://spark.apache.org/docs/latest/api/python/pyspark.sql.html#pyspark.sql.functions.collect_list
     # https://stackoverflow.com/questions/46580253/collect-list-by-preserving-order-based-on-another-variable
-
     def sort_and_analyze_time_series(l):
         if len(l) < 3687: # ideally this needs to be 4096; 10% tolerance
             return None
@@ -113,16 +111,21 @@ if __name__ == "__main__":
 
     analyze_udf = udf(sort_and_analyze_time_series)
 
-    # Apply the UDF to the time series of voltage and obtain the seizure metric
-    df_analyzed = df_windowed \
-        .withColumn("time_series", analyze_udf(col(time_series)).cast(FloatType()).alias("abnormality_indicator"))
+    df_analyzed = df_windowed.select(
+        "instr_time",
+        df_windowed.window.end.alias("ingest_time"),
+        "subject_id",
+        "channel",
+        analyze_udf(df_windowed.time_series).cast(FloatType()).alias("abnormality_indicator"),
+        "num_datapoints"
+    )
 
     # write the abnormality metrics to TimescaleDB at a 4-second batch
     df_write = df_analyzed \
         .writeStream \
         .outputMode("append") \
         .foreachBatch(postgres_batch_analyzed) \
-        .trigger(processingTime="4 seconds") \
+        .trigger(processingTime="5 seconds") \
         .start()
 
     df_write.awaitTermination()
