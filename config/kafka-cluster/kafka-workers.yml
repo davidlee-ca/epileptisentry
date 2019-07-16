@@ -1,8 +1,8 @@
 purchase_type: on_demand
-subnet_id: subnet-
+subnet_id: subnet-foobar
 num_instances: 4
-key_name: -keypair
-security_group_ids: sg-
+key_name: foobar-keypair
+security_group_ids: sg-foobar
 instance_type: m5.large
 tag_name: kafka-cluster
 vol_size: 120
