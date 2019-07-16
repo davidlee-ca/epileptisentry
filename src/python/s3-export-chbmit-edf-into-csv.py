@@ -74,10 +74,14 @@ if __name__ == "__main__":
     # If tape type == 1, tape has 23 channels in a pristine condition
     # If tape type == 2, tape has an extraneous 24th channel that must be deleted
     # If tape type == 3, tape has empty channels at: 5, 10, 13, 18, 23
+    # If tape type == 4, tape has a bunch of reference channels -- chb15 only
     if tape_type == "2":
         export_matrix = np.delete(export_matrix, 24, axis=1)
     if tape_type == "3":
         export_matrix = np.delete(export_matrix, [5, 10, 13, 18, 23], axis=1)
+    if tape_type == "4":
+        export_matrix = np.delete(export_matrix, [5, 10, 13, 14, 19, 24, 30, 31, 32, 33, 34, 35, 36, 37, 38], axis=1)
+
 
     # Save the exported csv
     np.savetxt(temporary_export, export_matrix, fmt='%.6f', delimiter=',', header=export_header)
@@ -86,6 +90,6 @@ if __name__ == "__main__":
     s3.upload_file(temporary_export, export_bucket, export_key)
 
     os.remove(temporary_source)
-    os.remove(temporary_export)
+    # os.remove(temporary_export)
 
     print(f"s3-export-chbmit-edf-into-csv: successfully exported {common_key}.")
