@@ -16,12 +16,12 @@ Subject ID (e.g. 'chb01')<br>Channel (e.g. 'CZ-PZ') |Timestamp, in Unix-style ti
 
 At regular intervals, the script checks slippage of time (i.e. difference between the instrument timestamp and the elapsed time since the start of the program) and adjusts its pace of signal reproduction.
 
-`start_producers.sh` launches 12 simultaneous processes of the above script.
+`start_producers.sh` launches 10 simultaneous processes of the above script.
 
 ## Stream Processing
 
-
+`v3-calculate-indicators.py` contains PySpark code to calculate the abnormal activity indicator. To start this script, run the `start_sparkjob.sh` script to provide the necessary drivers and packages (Kafka consumer, JDBC driver for TimescaleDB).
 
 ## Miscellaneous
 
-foobar
+'s3-export-chbmit-edf-into-csv.py` is a script to unpack CHB-MIT's scalp EEG data, encoded in European Data Format (EDF), into comma-delimited values (CSV) format.
