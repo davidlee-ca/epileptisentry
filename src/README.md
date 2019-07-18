@@ -24,4 +24,4 @@ At regular intervals, the script checks slippage of time (i.e. difference betwee
 
 ## Miscellaneous
 
-'s3-export-chbmit-edf-into-csv.py` is a script to unpack CHB-MIT's scalp EEG data, encoded in European Data Format (EDF), into comma-delimited values (CSV) format.
+`s3-export-chbmit-edf-into-csv.py` is a script to unpack CHB-MIT's scalp EEG data, encoded in European Data Format (EDF), into comma-delimited values (CSV) format.
